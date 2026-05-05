@@ -295,7 +295,7 @@ export default function App() {
             </div>
 
             {/* Security Shield System */}
-            <SecurityShield />
+            <SecurityShield analysis={aiAnalysis} />
           </div>
         </div>
       </main>

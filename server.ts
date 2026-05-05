@@ -54,71 +54,122 @@ export async function startServer() {
   // Middleware
   app.use(express.json());
 
-  const getMockFlows = () => {
-    const protocols = ['TCP', 'UDP', 'ICMP'];
-    const statuses = ['active', 'dormant', 'dropped'];
-    return Array.from({ length: 15 }, (_, i) => ({
+// Persistent storage for smoother data transitions
+const serverState = {
+  stats: {
+    bps: 1200000,
+    pps: 450,
+    activeConnections: 1200,
+    cpuUsage: 2.5
+  },
+  flows: [] as any[]
+};
+
+const getMockFlows = () => {
+  const protocols = ['TCP', 'UDP', 'ICMP'];
+  const statuses = ['active', 'dormant', 'dropped'];
+  const processes = ['nginx', 'ssh', 'chrome', 'python3', 'node', 'systemd', 'wechat', 'dingtalk'];
+  
+  // Maintain some continuity by only replacing a few flows at a time
+  if (serverState.flows.length === 0) {
+    serverState.flows = Array.from({ length: 15 }, (_, i) => ({
       id: `flow-${i}`,
       srcIp: `192.168.1.${Math.floor(Math.random() * 254) + 1}`,
       srcPort: Math.floor(Math.random() * 65535),
       dstIp: `10.0.0.${Math.floor(Math.random() * 254) + 1}`,
       dstPort: Math.floor(Math.random() * 1024),
-      srcLat: 34.0522 + (Math.random() - 0.5) * 2,
-      srcLng: -118.2437 + (Math.random() - 0.5) * 2,
-      dstLat: 40.7128 + (Math.random() - 0.5) * 30,
-      dstLng: -74.0060 + (Math.random() - 0.5) * 30,
+      srcLat: 34.0522 + (Math.random() - 0.5) * 5, // China regions approximate
+      srcLng: 105.2437 + (Math.random() - 0.5) * 10,
+      dstLat: 20 + Math.random() * 40,
+      dstLng: 70 + Math.random() * 60,
       protocol: protocols[Math.floor(Math.random() * protocols.length)],
       status: statuses[Math.floor(Math.random() * statuses.length)],
-      bytes: Math.floor(Math.random() * 1000000),
-      packets: Math.floor(Math.random() * 5000),
+      bytes: Math.floor(Math.random() * 50000),
+      packets: Math.floor(Math.random() * 200),
       timestamp: new Date().toISOString(),
-      process: ['nginx', 'ssh', 'chrome', 'python3', 'node'][Math.floor(Math.random() * 5)]
+      process: processes[Math.floor(Math.random() * processes.length)]
     }));
-  };
-
-  // Mock API for Network Flows
-  app.get('/api/flows', (req, res) => {
-    res.json(getMockFlows());
-  });
-
-  // Local Analysis Endpoint (No external API calls)
-  app.post('/api/analyze', (req, res) => {
-    const { data } = req.body;
-    const result = localAnalyze(data);
-    res.json(result);
-  });
-
-  // Mock API for Stats
-  app.get('/api/stats', (req, res) => {
-    res.json({
-      uptime: process.uptime(),
-      bps: Math.floor(Math.random() * 5000000),
-      pps: Math.floor(Math.random() * 10000),
-      activeConnections: Math.floor(Math.random() * 1500),
-      cpuUsage: (Math.random() * 15).toFixed(2),
-      memoryUsage: (Math.random() * 200).toFixed(2)
-    });
-  });
-
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
+    // Modify existing flows slightly to simulate activity
+    serverState.flows = serverState.flows.map(flow => ({
+      ...flow,
+      bytes: flow.bytes + Math.floor(Math.random() * 10000),
+      packets: flow.packets + Math.floor(Math.random() * 50),
+      timestamp: new Date().toISOString(),
+      status: Math.random() > 0.9 ? statuses[Math.floor(Math.random() * statuses.length)] : flow.status
+    }));
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    // Occasionally replace one flow
+    if (Math.random() > 0.7) {
+      const idx = Math.floor(Math.random() * serverState.flows.length);
+      serverState.flows[idx] = {
+        ...serverState.flows[idx],
+        id: `flow-${Date.now()}`,
+        bytes: Math.floor(Math.random() * 1000),
+        packets: Math.floor(Math.random() * 10),
+        dstIp: `10.0.0.${Math.floor(Math.random() * 254) + 1}`,
+        process: processes[Math.floor(Math.random() * processes.length)]
+      };
+    }
+  }
+  return serverState.flows;
+};
+
+// Mock API for Network Flows
+app.get('/api/flows', (req, res) => {
+  res.json(getMockFlows());
+});
+
+// Local Analysis Endpoint (No external API calls)
+app.post('/api/analyze', (req, res) => {
+  const { data } = req.body;
+  const result = localAnalyze(data);
+  res.json(result);
+});
+
+// Mock API for Stats
+app.get('/api/stats', (req, res) => {
+  // Smooth transitions for stats
+  serverState.stats.bps = Math.max(100000, serverState.stats.bps + (Math.random() - 0.5) * 500000);
+  serverState.stats.pps = Math.max(50, serverState.stats.pps + (Math.random() - 0.5) * 100);
+  serverState.stats.activeConnections = Math.max(10, serverState.stats.activeConnections + Math.floor((Math.random() - 0.5) * 50));
+  serverState.stats.cpuUsage = Math.min(100, Math.max(0.5, serverState.stats.cpuUsage + (Math.random() - 0.5) * 1.5));
+
+  res.json({
+    uptime: process.uptime(),
+    bps: Math.floor(serverState.stats.bps),
+    pps: Math.floor(serverState.stats.pps),
+    activeConnections: serverState.stats.activeConnections,
+    cpuUsage: serverState.stats.cpuUsage.toFixed(2),
+    memoryUsage: (Math.random() * 200 + 400).toFixed(2)
   });
+});
+
+// Vite middleware for development
+if (process.env.NODE_ENV !== 'production') {
+  const { createServer: createViteServer } = await import('vite');
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: 'spa',
+  });
+  app.use(vite.middlewares);
+} else {
+  const distPath = path.join(process.cwd(), 'dist');
+  app.use(express.static(distPath));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
+
+/**
+ * Note on Host/Port:
+ * In a real local desktop/android setup, '127.0.0.1' is safer.
+ * However, in this cloud container environment, we MUST bind to '0.0.0.0'
+ * to allow the platform's reverse proxy to route traffic to the preview.
+ */
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url) || process.env.NODE_ENV === 'development') {

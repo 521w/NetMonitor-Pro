@@ -28,3 +28,9 @@ export interface AIAnalysis {
   summary: string;
   suspicious_ips: string[];
 }
+
+export interface HistoryPoint {
+  time: string;
+  bps: number;
+  pps: number;
+}

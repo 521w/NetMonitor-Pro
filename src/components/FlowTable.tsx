@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database } from 'lucide-react';
+import { Database, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Flow, AIAnalysis } from '../types';
 import { cn } from '../lib/utils';
@@ -9,9 +9,10 @@ interface FlowTableProps {
   flows: Flow[];
   aiAnalysis: AIAnalysis | null;
   onSelectFlow: (flow: Flow) => void;
+  onExport: () => void;
 }
 
-export const FlowTable = ({ flows, aiAnalysis, onSelectFlow }: FlowTableProps) => {
+export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTableProps) => {
   return (
     <div className="technical-border rounded-xl bg-white/5 overflow-hidden flex flex-col">
       <div className="p-6 border-b border-white/5 flex items-center justify-between">
@@ -19,7 +20,16 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow }: FlowTableProps) =
           <Database size={18} className="text-blue-400" />
           实时数据流追踪
         </h3>
-        <div className="text-xs text-blue-100/40">当前活跃会话: {flows.length}</div>
+        <div className="flex items-center gap-4">
+          <div className="text-xs text-blue-100/40">当前活跃会话: {flows.length}</div>
+          <button 
+            onClick={onExport}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-300 rounded-lg transition-all border border-white/10"
+          >
+            <Download size={14} />
+            导出 PCAP
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">

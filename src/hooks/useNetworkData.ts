@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
-import { Flow, NetworkStats } from '../types';
+import { Flow, NetworkStats, HistoryPoint } from '../types';
 
 export function useNetworkData(interval: number = 5000) {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [stats, setStats] = useState<NetworkStats | null>(null);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
   const prevStats = useRef<NetworkStats | null>(null);
   const [trends, setTrends] = useState({ bps: 0, pps: 0, activeConnections: 0 });
