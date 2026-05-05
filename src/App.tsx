@@ -427,7 +427,10 @@ export default function App() {
             </div>
 
             {/* Flows Table */}
-            <div className={cn(mobileView !== 'table' && "hidden lg:block")}>
+            <div className={cn(
+              "technical-card !p-0 overflow-hidden",
+              mobileView === 'monitor' ? "hidden lg:block" : "block"
+            )}>
               <FlowTable 
                 flows={filteredFlows} 
                 aiAnalysis={aiAnalysis}
@@ -438,7 +441,10 @@ export default function App() {
           </div>
 
           {/* Sidebar Information Panel */}
-          <div className={cn("space-y-8", mobileView !== 'monitor' && "hidden lg:block")}>
+          <div className={cn(
+            "space-y-8",
+            mobileView === 'monitor' ? "block" : "hidden lg:block"
+          )}>
             {/* Analysis Engine */}
             <LocalInsightPanel 
               analysis={aiAnalysis} 

@@ -11,16 +11,23 @@ export interface ShellResult {
 export class RootExecutor {
   private static status: DeviceStatus = 'UNCHECKED';
   
-  // 命令白名单 (工程建议 3.3)
   private static readonly WHITELIST = [
     'id',
     'ls /sys/class/net',
     'setenforce 0',
     'chmod 755',
     'kill -9',
-    'tcpdump -i',
+    'tcpdump',
     'cat /proc/net/dev'
   ];
+
+  // 模拟 VPN 冲突检测 (工程建议 2.1)
+  static async checkVpnConflict(): Promise<boolean> {
+    console.log('[RootExecutor] Checking for VPN conflicts...');
+    // 模拟检测 Clash/WireGuard 是否占用 tun0
+    const { output } = await this.exec('ls /sys/class/net');
+    return output.includes('tun0');
+  }
 
   static async checkPermission(): Promise<DeviceStatus> {
     try {

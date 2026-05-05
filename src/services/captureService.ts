@@ -11,7 +11,19 @@ export type FlowListener = (flows: Flow[]) => void;
  * 职责: 判定能力、切换源、调度 Pipeline
  */
 export class CaptureService {
-  private static flows: Flow[] = [];
+  private static flows: Flow[] = [
+    {
+      id: 'init-1',
+      srcIp: '10.0.0.1', srcPort: 54321,
+      dstIp: '172.217.160.78', dstPort: 443,
+      protocol: 'TCP', status: 'active',
+      bytes: 1024, packets: 5,
+      process: 'init-system', interface: 'tun0',
+      srcLat: 39.9, srcLng: 116.4, dstLat: 39.9, dstLng: 116.4,
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'passive', timestamp: new Date().toISOString(), reliability: 1.0 }
+    }
+  ];
   private static state: KernelServiceState = {
     deviceStatus: 'UNCHECKED',
     captureStatus: 'IDLE',
