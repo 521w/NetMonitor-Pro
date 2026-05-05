@@ -1,0 +1,6 @@
+{
+  "appId": "com.netmonitor.pro",
+  "appName": "NetMonitor PRO",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
