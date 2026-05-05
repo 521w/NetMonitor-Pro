@@ -31,7 +31,7 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
           </button>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto hidden md:block">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-white/5 text-[10px] uppercase tracking-widest text-slate-400">
@@ -99,6 +99,57 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
             </AnimatePresence>
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden divide-y divide-white/5">
+        <AnimatePresence>
+          {flows.map((flow) => {
+            const isSuspicious = aiAnalysis?.suspicious_ips?.includes(flow.srcIp) || aiAnalysis?.suspicious_ips?.includes(flow.dstIp);
+            
+            return (
+              <motion.div
+                key={flow.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0 }}
+                onClick={() => onSelectFlow(flow)}
+                className={cn(
+                  "p-4 active:bg-white/10 transition-colors cursor-pointer",
+                  isSuspicious && "bg-rose-500/5"
+                )}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <StatusDot status={flow.status} />
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{flow.protocol}</span>
+                    <span className="bg-white/10 text-[10px] px-1.5 py-0.5 rounded text-slate-300 font-mono">
+                      {flow.process}
+                    </span>
+                  </div>
+                  <div className="text-xs font-mono text-blue-400 font-bold">
+                    {(flow.bytes / 1024).toFixed(1)} KB
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className={cn("font-mono", aiAnalysis?.suspicious_ips?.includes(flow.srcIp) ? "text-rose-400" : "text-blue-400")}>
+                      {flow.srcIp}
+                    </span>
+                    <span className="text-slate-600">→</span>
+                    <span className={cn("font-mono", aiAnalysis?.suspicious_ips?.includes(flow.dstIp) ? "text-rose-400" : "text-slate-200")}>
+                      {flow.dstIp}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-500 flex justify-between">
+                    <span>端口: {flow.srcPort}</span>
+                    <span>目标端口: {flow.dstPort}</span>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
     </div>
   );
