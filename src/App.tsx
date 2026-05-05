@@ -79,31 +79,38 @@ export default function App() {
     return flows.filter(f => 
       f.srcIp.includes(search) || 
       f.dstIp.includes(search) || 
-      f.process.toLowerCase().includes(search.toLowerCase())
+      f.process.toLowerCase().includes(search.toLowerCase()) ||
+      f.interface.toLowerCase().includes(search.toLowerCase())
     );
   }, [flows, search]);
 
   return (
-    <div className="min-h-screen bg-[#02010a] text-slate-50 font-sans selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#02010a] text-slate-50 font-sans selection:bg-rose-500/30">
       {/* Top Navigation */}
       <nav className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-8 backdrop-blur-xl sticky top-0 z-50 bg-[#02010a]/80">
-        <div className="flex items-center gap-2 md:gap-3">
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 rounded-lg flex items-center justify-center glow-primary">
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-rose-600 rounded-lg flex items-center justify-center glow-primary">
             <Shield className="text-white" size={18} />
           </div>
           <div>
-            <h1 className="font-bold text-sm md:text-lg tracking-tight">IP 泄露审计 <span className="text-rose-500">内核探针</span></h1>
-            <div className="flex items-center gap-1 md:gap-2 text-[8px] md:text-[10px] text-slate-400 uppercase tracking-widest font-mono">
-              <span className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Audit Mode: Active Privacy Shield
+            <h1 className="font-bold text-sm md:text-lg tracking-tight uppercase tracking-tighter">LeakAudit <span className="text-rose-500 font-mono">内核版</span></h1>
+            <div className="flex items-center gap-1 md:gap-2 text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Real-time Privacy Protection
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2 md:gap-6">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-indigo-500/10 rounded-full border border-indigo-500/30">
-            <Activity size={14} className="text-indigo-400" />
-            <span className="text-xs font-bold text-indigo-400 font-mono">LISTEN 模式</span>
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/10 group focus-within:border-rose-500/50 transition-all">
+            <Search size={14} className="text-slate-500 group-focus-within:text-rose-400" />
+            <input 
+              type="text" 
+              placeholder="搜索网卡、IP或进程..." 
+              className="bg-transparent border-none outline-none text-xs w-48 placeholder:text-slate-700"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
           <button 
             onClick={() => setNotifications(0)}

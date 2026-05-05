@@ -13,6 +13,7 @@ export interface Flow {
   bytes: number;
   packets: number;
   process: string;
+  interface: string;
   timestamp: string;
 }
 
