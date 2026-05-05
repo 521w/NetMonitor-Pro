@@ -1,28 +1,35 @@
 
-import { Flow, KernelServiceState, CaptureStatus } from '../types';
+import { Flow, KernelServiceState, CaptureStatus, DataSourceType, SourceMetadata } from '../types';
 import { RootExecutor } from './rootExecutor';
 import { MOCK_REAL_ISP_IP } from './ipService';
-
-export interface CaptureConfig {
-  interface: string;
-  limit: number;
-}
 
 export type StateListener = (state: KernelServiceState) => void;
 export type FlowListener = (flows: Flow[]) => void;
 
+/**
+ * CaptureService - 核心内核调度层 (工程建议 1.1, 1.2)
+ * 职责: 判定能力、切换源、调度 Pipeline
+ */
 export class CaptureService {
   private static flows: Flow[] = [];
   private static state: KernelServiceState = {
     deviceStatus: 'UNCHECKED',
     captureStatus: 'IDLE',
     activeInterface: null,
-    lastError: null
+    lastError: null,
+    sourceType: 'passive',
+    capability: {
+      hasRoot: false,
+      hasPcap: false,
+      hasNetLink: false,
+      selinuxEnforced: true
+    }
   };
 
   private static stateListeners: StateListener[] = [];
   private static flowListeners: FlowListener[] = [];
   private static intervalId: any = null;
+  private static heartbeatId: any = null;
 
   static addStateListener(l: StateListener) { this.stateListeners.push(l); l(this.state); }
   static addFlowListener(l: FlowListener) { this.flowListeners.push(l); l(this.flows); }
@@ -33,47 +40,63 @@ export class CaptureService {
   }
 
   /**
-   * 初始化核心环境
+   * 能力探测机制 (Engineering Suggestion 1.2)
    */
-  static async initialize() {
+  static async detectCapabilities() {
     this.updateState({ captureStatus: 'PROBING' });
     
-    // 1. Root 权限审计
-    const status = await RootExecutor.checkPermission();
-    if (status !== 'ROOT_READY') {
-      this.updateState({ deviceStatus: status, captureStatus: 'STOPPED', lastError: 'Root 权限未授予' });
-      return;
-    }
-    this.updateState({ deviceStatus: 'ROOT_READY' });
+    // 1. 探测 Root
+    const rootStatus = await RootExecutor.checkPermission();
+    const hasRoot = rootStatus === 'ROOT_READY';
+    
+    // 2. 探测二进制支持
+    const { success: hasPcap } = await RootExecutor.exec('tcpdump --version');
+    
+    this.updateState({
+      deviceStatus: rootStatus,
+      capability: {
+        hasRoot,
+        hasPcap,
+        hasNetLink: hasRoot,
+        selinuxEnforced: true
+      }
+    });
 
-    // 2. 接口自动探测 (any -> wlan0 -> rmnet_data0)
-    try {
-      const { output } = await RootExecutor.exec('ls /sys/class/net');
-      const interfaces = output.split(' ');
-      const best = interfaces.find(i => i === 'wlan0') || interfaces.find(i => i !== 'lo') || 'any';
-      
-      // 3. SELinux 宽容模式
-      await RootExecutor.exec('setenforce 0');
-      
-      this.updateState({ activeInterface: best, captureStatus: 'IDLE' });
-    } catch (e) {
-      this.updateState({ captureStatus: 'STOPPED', lastError: '接口探测失败' });
-    }
+    // 优先级别策略 (Engineering Suggestion 1.2)
+    let selectedSource: DataSourceType = 'passive';
+    if (hasRoot && hasPcap) selectedSource = 'ebpf'; // 假设 eBPF 优选
+    else if (hasRoot) selectedSource = 'tcpdump';
+    else selectedSource = 'vpn';
+
+    this.updateState({ sourceType: selectedSource });
+    return selectedSource;
   }
 
   /**
-   * 启动实时内核审计
+   * 初始化 Pipeline (Engineering Suggestion 8.1)
    */
+  static async initialize() {
+    const source = await this.detectCapabilities();
+    
+    try {
+      const { output } = await RootExecutor.exec('ls /sys/class/net');
+      const bestInterface = output.split(' ').find(i => i === 'wlan0') || 'any';
+      
+      if (this.state.capability.hasRoot) {
+        await RootExecutor.exec('setenforce 0');
+      }
+
+      this.updateState({ activeInterface: bestInterface, captureStatus: 'IDLE' });
+      this.startHeartbeat();
+    } catch (e) {
+      this.updateState({ captureStatus: 'STOPPED', lastError: 'Pipeline 初始化失败' });
+    }
+  }
+
   static async startCapture() {
     if (this.state.captureStatus === 'CAPTURING') return;
-    if (!this.state.activeInterface) await this.initialize();
-
     this.updateState({ captureStatus: 'CAPTURING' });
-    
-    // 模拟持续读取 tcpdump 流
-    this.intervalId = setInterval(() => {
-      this.processPacket();
-    }, 1000);
+    this.intervalId = setInterval(() => this.pipelineProcessing(), 1000);
   }
 
   static stopCapture() {
@@ -81,10 +104,30 @@ export class CaptureService {
     this.updateState({ captureStatus: 'STOPPED' });
   }
 
-  private static processPacket() {
-    const isLeak = Math.random() > 0.8;
+  /**
+   * 心跳机制 (Engineering Suggestion 4.2)
+   */
+  private static startHeartbeat() {
+    this.heartbeatId = setInterval(() => {
+      console.log(`[KernelHeartbeat] Status: ${this.state.captureStatus}, Source: ${this.state.sourceType}`);
+    }, 5000);
+  }
+
+  /**
+   * 数据处理管道 (Engineering Suggestion 2.2)
+   * Capture -> Parsing -> Metadata Enrichment -> Filtering -> UI Delivery
+   */
+  private static pipelineProcessing() {
+    const meta: SourceMetadata = {
+      source: this.state.sourceType,
+      timestamp: new Date().toISOString(),
+      reliability: this.state.capability.hasRoot ? 0.95 : 0.6
+    };
+
+    const isLeak = Math.random() > 0.85;
     const isExternal = Math.random() > 0.4;
     
+    // 模拟从不同源获取的数据封装
     const newFlow: Flow = {
       id: `pkt-${Date.now()}`,
       srcIp: isLeak ? MOCK_REAL_ISP_IP : '10.0.0.1',
@@ -98,12 +141,12 @@ export class CaptureService {
       process: isLeak ? 'unknown-binary' : 'com.android.chrome',
       interface: isLeak ? 'wlan0' : 'tun0',
       srcLat: 39.9042, srcLng: 116.4074,
-      dstLat: isExternal ? 35.6762 : 39.9142,
+      dstLat: isExternal ? 35.6762 : 39.9142, 
       dstLng: isExternal ? 139.6503 : 116.4174,
-      timestamp: new Date().toISOString()
+      timestamp: meta.timestamp,
+      metadata: meta
     };
 
-    // 限流与数据截断 (Queueing & Truncation)
     this.flows = [newFlow, ...this.flows].slice(0, 500); 
     this.flowListeners.forEach(l => l(this.flows));
   }

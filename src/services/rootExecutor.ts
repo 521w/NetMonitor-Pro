@@ -1,20 +1,31 @@
 
 import { DeviceStatus } from '../types';
 
+export interface ShellResult {
+  success: boolean;
+  output: string;
+  exitCode: number;
+  timestamp: number;
+}
+
 export class RootExecutor {
   private static status: DeviceStatus = 'UNCHECKED';
+  
+  // 命令白名单 (工程建议 3.3)
+  private static readonly WHITELIST = [
+    'id',
+    'ls /sys/class/net',
+    'setenforce 0',
+    'chmod 755',
+    'kill -9',
+    'tcpdump -i',
+    'cat /proc/net/dev'
+  ];
 
-  /**
-   * 检查 Root 权限 (模拟 su -c id)
-   */
   static async checkPermission(): Promise<DeviceStatus> {
     try {
-      const { output } = await this.exec('id');
-      if (output.includes('uid=0')) {
-        this.status = 'ROOT_READY';
-      } else {
-        this.status = 'ROOT_DENIED';
-      }
+      const result = await this.exec('id');
+      this.status = result.output.includes('uid=0') ? 'ROOT_READY' : 'ROOT_DENIED';
     } catch (e) {
       this.status = 'ROOT_DENIED';
     }
@@ -22,25 +33,30 @@ export class RootExecutor {
   }
 
   /**
-   * 执行 Shell 命令 (模拟 su -c)
+   * 执行 Shell 命令 (带安全边界与结构化返回)
    */
-  static async exec(command: string): Promise<{ success: boolean; output: string }> {
-    console.log(`[RootShell] Executing: su -c "${command}"`);
+  static async exec(command: string): Promise<ShellResult> {
+    const isWhitelisted = this.WHITELIST.some(cmd => command.startsWith(cmd));
     
-    // 模拟不同命令的返回结果
-    if (command === 'id') {
-      return { success: true, output: 'uid=0(root) gid=0(root) groups=0(root)' };
-    }
-    
-    if (command === 'ls /sys/class/net') {
-      return { success: true, output: 'lo wlan0 tun0 rmnet_data0' };
+    if (!isWhitelisted) {
+      console.warn(`[RootShell] Blocked non-whitelist command: ${command}`);
+      return { success: false, output: 'Command blocked by security policy', exitCode: 1, timestamp: Date.now() };
     }
 
-    if (command.includes('setenforce 0')) {
-      return { success: true, output: '' };
-    }
+    console.log(`[RootShell] su -c "${command}"`);
+    
+    // 模拟执行逻辑 (生产环境将对接 native bridge)
+    let output = 'success';
+    if (command === 'id') output = 'uid=0(root) gid=0(root)';
+    if (command === 'ls /sys/class/net') output = 'lo wlan0 tun0 rmnet_data0';
+    if (command.includes('cat /proc/net/dev')) output = 'wlan0: 100 1 0 0 0 0 0 0 200 2 0 0 0 0 0 0';
 
-    return { success: true, output: 'success' };
+    return { 
+      success: true, 
+      output, 
+      exitCode: 0, 
+      timestamp: Date.now() 
+    };
   }
 
   static getStatus(): DeviceStatus {

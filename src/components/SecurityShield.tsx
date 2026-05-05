@@ -1,11 +1,12 @@
 import { Shield, AlertTriangle, Info } from 'lucide-react';
-import { AIAnalysis } from '../types';
+import { AIAnalysis, UIState } from '../types';
 
 interface SecurityShieldProps {
   analysis: AIAnalysis | null;
+  uiState: UIState | null;
 }
 
-export const SecurityShield = ({ analysis }: SecurityShieldProps) => {
+export const SecurityShield = ({ analysis, uiState }: SecurityShieldProps) => {
   const alerts = analysis ? [
     { type: analysis.risk_level === 'critical' ? '检测到核心隐私泄露' : '正在扫描绕过行为', time: '刚刚', level: analysis.risk_level === 'critical' || analysis.risk_level === 'high' ? 'high' : 'low' },
     { type: '内核态 eBPF 探针同步', time: '1分钟前', level: 'low' as const },
@@ -16,18 +17,20 @@ export const SecurityShield = ({ analysis }: SecurityShieldProps) => {
     { type: '等待内核态扫描请求', time: '1小时前', level: 'low' as const }
   ];
 
+  const currentLevel = uiState?.threatLevel || analysis?.risk_level || 'low';
+
   return (
     <div className="technical-border rounded-xl p-6 bg-white/5 space-y-6">
       <div className="flex items-center gap-4">
         <div className={`p-3 rounded-xl text-white shadow-lg ${
-          analysis?.risk_level === 'critical' || analysis?.risk_level === 'high' ? 'bg-rose-600 shadow-rose-500/40' : 'bg-blue-600 shadow-blue-500/40'
+          currentLevel === 'critical' || currentLevel === 'high' ? 'bg-rose-600 shadow-rose-500/40' : 'bg-blue-600 shadow-blue-500/40'
         }`}>
           <Shield size={20} />
         </div>
         <div>
           <h3 className="font-bold text-white">内核探针防御系统</h3>
           <p className="text-xs text-slate-400">
-            {analysis ? `当前隐私泄露风险评分: ${analysis.privacy_score}` : '多维度泄露拦截已开启'}
+            {uiState ? `内核威胁等级: ${uiState.threatLevel.toUpperCase()}` : '多维度泄露拦截已开启'}
           </p>
         </div>
       </div>
@@ -40,9 +43,9 @@ export const SecurityShield = ({ analysis }: SecurityShieldProps) => {
           </div>
           <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div className={`h-full transition-all duration-1000 ${
-              analysis?.risk_level === 'critical' ? 'w-full bg-rose-500 shadow-[0_0_8px_#f43f5e]' : 
-              analysis?.risk_level === 'high' ? 'w-[85%] bg-rose-500/50 shadow-[0_0_8px_#f43f5e]' : 
-              analysis?.risk_level === 'low' ? 'w-[15%] bg-blue-500 shadow-[0_0_8px_#3b82f6]' : 'w-[5%] bg-blue-400'
+              currentLevel === 'critical' ? 'w-full bg-rose-500 shadow-[0_0_8px_#f43f5e]' : 
+              currentLevel === 'high' ? 'w-[85%] bg-rose-500/50 shadow-[0_0_8px_#f43f5e]' : 
+              currentLevel === 'low' ? 'w-[15%] bg-blue-500 shadow-[0_0_8px_#3b82f6]' : 'w-[5%] bg-blue-400'
             }`} />
           </div>
         </div>

@@ -45,9 +45,11 @@ import { CaptureService } from './services/captureService';
 import { fetchPublicIP, IPInfo, MOCK_REAL_ISP_IP, MOCK_REAL_ISP_LOC } from './services/ipService';
 
 export default function App() {
-  const { flows, stats, history, error, trends, serviceState, setFlows } = useNetworkData(); 
+  const { flows, stats, history, error, trends, serviceState, uiState, setFlows } = useNetworkData(); 
   const [search, setSearch] = useState('');
   const [exitIpInfo, setExitIpInfo] = useState<IPInfo | null>(null);
+
+  const [ipInfo, setIpInfo] = useState<IPInfo | null>(null);
 
   useEffect(() => {
     fetchPublicIP().then(setExitIpInfo);
@@ -168,7 +170,7 @@ export default function App() {
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold">内核驱动状态: {serviceState.captureStatus}</h2>
+                  <h2 className="text-lg font-bold">审计驱动: {serviceState.sourceType.toUpperCase()}</h2>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                     serviceState.deviceStatus === 'ROOT_READY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
                   }`}>
@@ -176,8 +178,9 @@ export default function App() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 font-mono">
-                  活跃网卡: <span className="text-white">{serviceState.activeInterface || '探测中...'}</span> 
-                  {error && <span className="text-rose-500 ml-3">| 错误: {error}</span>}
+                  网卡: <span className="text-white">{serviceState.activeInterface || '探测中...'}</span> 
+                  <span className="mx-2 text-slate-600">|</span>
+                  源精度: <span className="text-indigo-400">{(stats?.metadata.reliability || 0) * 100}%</span>
                 </p>
               </div>
             </div>
@@ -465,7 +468,7 @@ export default function App() {
             </div>
 
             {/* Security Shield System */}
-            <SecurityShield analysis={aiAnalysis} />
+            <SecurityShield analysis={aiAnalysis} uiState={uiState} />
           </div>
         </div>
       </main>

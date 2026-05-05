@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Flow, NetworkStats, HistoryPoint, KernelServiceState } from '../types';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Flow, NetworkStats, HistoryPoint, KernelServiceState, UIState } from '../types';
 import { calculateTrend } from '../lib/networkUtils';
 import { CaptureService } from '../services/captureService';
 
@@ -12,8 +12,19 @@ export function useNetworkData() {
   const [trends, setTrends] = useState({ bps: 0, pps: 0, activeConnections: 0 });
   const [serviceState, setServiceState] = useState<KernelServiceState>(CaptureService.getState());
 
+  // 统一 UI State 模型 (Engineering Suggestion 6.3)
+  const uiState = useMemo<UIState>(() => {
+    const leaks = flows.filter(f => f.status === 'leaking');
+    return {
+      isKernelActive: serviceState.captureStatus === 'CAPTURING',
+      isLeakDetected: leaks.length > 0,
+      threatLevel: leaks.length > 5 ? 'critical' : (leaks.length > 0 ? 'high' : 'low'),
+      activeCount: flows.length,
+      lastSyncTime: Date.now()
+    };
+  }, [flows, serviceState]);
+
   useEffect(() => {
-    // 订阅状态与流量数据
     CaptureService.addStateListener(setServiceState);
     
     CaptureService.addFlowListener((allFlows) => {
@@ -32,7 +43,8 @@ export function useNetworkData() {
         pps: currentPps,
         cpuUsage: (Math.random() * 5 + 2).toFixed(2),
         uptime: Math.floor(Math.random() * 1000),
-        memoryUsage: '42MB'
+        memoryUsage: '42MB',
+        metadata: allFlows[0]?.metadata || { source: 'passive', timestamp: new Date().toISOString(), reliability: 0.5 }
       };
 
       setStats(newStats);
@@ -56,11 +68,10 @@ export function useNetworkData() {
       });
     });
 
-    // 初始化驱动
     CaptureService.initialize();
 
     return () => CaptureService.stopCapture();
   }, []);
 
-  return { flows, stats, history, error, trends, serviceState, setFlows };
+  return { flows, stats, history, error, trends, serviceState, uiState, setFlows };
 }
