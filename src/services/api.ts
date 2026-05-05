@@ -4,18 +4,21 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export const api = {
   async getFlows(): Promise<Flow[]> {
+    console.log(`[API] GET /api/flows | Base: ${API_BASE}`);
     const res = await fetch(`${API_BASE}/api/flows`);
     if (!res.ok) throw new Error('网络流数据获取失败');
     return res.json();
   },
 
   async getStats(): Promise<NetworkStats> {
+    console.log(`[API] GET /api/stats | Base: ${API_BASE}`);
     const res = await fetch(`${API_BASE}/api/stats`);
     if (!res.ok) throw new Error('性能指标获取失败');
     return res.json();
   },
 
   async analyze(flows: Flow[]): Promise<AIAnalysis> {
+    console.log(`[API] POST /api/analyze | Base: ${API_BASE}`);
     const res = await fetch(`${API_BASE}/api/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
