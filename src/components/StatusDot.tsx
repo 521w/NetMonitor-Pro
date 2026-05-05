@@ -5,7 +5,8 @@ export const StatusDot = ({ status, className }: { status: string, className?: s
   const colors = {
     active: 'bg-emerald-500 shadow-[0_0_8px_#10b981]',
     dormant: 'bg-amber-500 shadow-[0_0_8px_#f59e0b]',
-    dropped: 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
+    dropped: 'bg-slate-500',
+    leaking: 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
   };
   
   return (

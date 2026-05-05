@@ -43,11 +43,18 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
               <th className="px-6 py-4 font-semibold">协议</th>
               <th className="px-6 py-4 font-semibold">流量载荷</th>
               <th className="px-6 py-4 font-semibold text-right">应用进程</th>
+              <th className="px-6 py-4 font-semibold text-right">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            <AnimatePresence>
-              {flows.map((flow) => {
+            <AnimatePresence initial={false}>
+              {flows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-500 italic">
+                    正在等待内核驱动捕获网络事件...
+                  </td>
+                </tr>
+              ) : flows.map((flow) => {
                 const isSrcSuspicious = aiAnalysis?.suspicious_ips?.includes(flow.srcIp);
                 const isDstSuspicious = aiAnalysis?.suspicious_ips?.includes(flow.dstIp);
                 const isLocal = flow.dstIp.startsWith('192.168.') || flow.dstIp === '127.0.0.1';
@@ -114,6 +121,17 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
                         {flow.process}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectFlow(flow);
+                        }}
+                        className="text-[10px] bg-white/5 hover:bg-blue-600 hover:text-white px-2 py-1 rounded border border-white/10 transition-all"
+                      >
+                        详情
+                      </button>
+                    </td>
                   </motion.tr>
                 );
               })}
@@ -170,9 +188,9 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
                       {flow.dstIp}
                     </span>
                   </div>
-                  <div className="text-[10px] font-mono text-slate-500 flex justify-between">
-                    <span>端口: {flow.srcPort}</span>
-                    <span>目标端口: {flow.dstPort}</span>
+                  <div className="text-[10px] font-mono text-slate-500 flex justify-between items-center">
+                    <span>端口: {flow.srcPort} | 目标端口: {flow.dstPort}</span>
+                    <span className="text-blue-400 flex items-center gap-1">查看详情 <Download size={10} className="rotate-[-90deg]" /></span>
                   </div>
                 </div>
               </motion.div>

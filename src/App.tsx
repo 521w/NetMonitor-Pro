@@ -355,8 +355,11 @@ export default function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Visualizer Area */}
-          <div className={cn("lg:col-span-2 space-y-8", mobileView !== 'monitor' && "hidden lg:block")}>
-            <div className="technical-border rounded-xl p-4 md:p-8 bg-white/[0.02]">
+          <div className="lg:col-span-2 space-y-8">
+            <div className={cn(
+              "technical-border rounded-xl p-4 md:p-8 bg-white/[0.02]",
+              mobileView === 'table' ? "hidden lg:block" : "block"
+            )}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 md:mb-10 gap-4">
                 <div>
                   <h3 className="text-lg md:text-xl font-bold text-white tracking-tight">本地 Socket 会话监控</h3>
@@ -429,7 +432,7 @@ export default function App() {
             {/* Flows Table */}
             <div className={cn(
               "technical-card !p-0 overflow-hidden",
-              mobileView === 'monitor' ? "hidden lg:block" : "block"
+              mobileView === 'monitor' ? "hidden lg:block border-none" : "block shadow-2xl border-white/10"
             )}>
               <FlowTable 
                 flows={filteredFlows} 

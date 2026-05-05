@@ -17,9 +17,9 @@ export const FlowDetailModal = ({ flow, onClose, onKill }: FlowDetailModalProps)
   const isLocal = flow.interface === 'lo' || flow.dstIp.startsWith('192.168.');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-lg">
       <motion.div 
-        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        initial={{ scale: 0.9, opacity: 0, y: 40 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         className="technical-border bg-slate-900 w-full max-w-2xl rounded-2xl p-0 overflow-hidden relative shadow-[0_0_50px_rgba(0,0,0,0.5)]"
       >

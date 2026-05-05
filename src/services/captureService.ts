@@ -6,11 +6,52 @@ import { MOCK_REAL_ISP_IP } from './ipService';
 export type StateListener = (state: KernelServiceState) => void;
 export type FlowListener = (flows: Flow[]) => void;
 
+interface IDataSource {
+  fetch(): Partial<Flow>;
+}
+
+class PassiveDataSource implements IDataSource {
+  fetch(): Partial<Flow> {
+    const isLeak = Math.random() > 0.95;
+    return {
+      srcIp: isLeak ? MOCK_REAL_ISP_IP : '10.0.0.1',
+      srcPort: 12345,
+      dstIp: '8.8.8.8',
+      dstPort: 53,
+      protocol: 'UDP',
+      status: 'active',
+      bytes: 64,
+      packets: 1,
+      process: 'system-dns',
+      interface: isLeak ? 'wlan0' : 'tun0'
+    };
+  }
+}
+
+class ActiveDataSource implements IDataSource {
+  fetch(): Partial<Flow> {
+    const isLeak = Math.random() > 0.7;
+    return {
+      srcIp: isLeak ? MOCK_REAL_ISP_IP : '10.0.0.2',
+      srcPort: 44332,
+      dstIp: isLeak ? '142.251.42.14' : '10.0.0.1',
+      dstPort: 443,
+      protocol: 'TCP',
+      status: isLeak ? 'leaking' : 'active',
+      bytes: Math.floor(Math.random() * 2000),
+      packets: 5,
+      process: isLeak ? 'ad-tracker' : 'com.google.android.gms',
+      interface: isLeak ? 'wlan0' : 'tun0'
+    };
+  }
+}
+
 /**
  * CaptureService - 核心内核调度层 (工程建议 1.1, 1.2)
  * 职责: 判定能力、切换源、调度 Pipeline
  */
 export class CaptureService {
+  private static dataSource: IDataSource = new PassiveDataSource();
   private static flows: Flow[] = [
     {
       id: 'init-1',
@@ -81,6 +122,7 @@ export class CaptureService {
     else selectedSource = 'vpn';
 
     this.updateState({ sourceType: selectedSource });
+    this.dataSource = hasRoot ? new ActiveDataSource() : new PassiveDataSource();
     return selectedSource;
   }
 
@@ -126,42 +168,55 @@ export class CaptureService {
   }
 
   /**
-   * 数据处理管道 (Engineering Suggestion 2.2)
+   * 数据处理管道 (Engineering Suggestion 8.1, P1 Pipeline)
    * Capture -> Parsing -> Metadata Enrichment -> Filtering -> UI Delivery
    */
   private static pipelineProcessing() {
-    const meta: SourceMetadata = {
-      source: this.state.sourceType,
-      timestamp: new Date().toISOString(),
-      reliability: this.state.capability.hasRoot ? 0.95 : 0.6
-    };
-
-    const isLeak = Math.random() > 0.85;
-    const isExternal = Math.random() > 0.4;
+    const rawData = this.dataSource.fetch();
+    const enrichedData = this.enrichMetadata(rawData);
+    const filteredData = this.applyFiltering(enrichedData);
     
-    // 模拟从不同源获取的数据封装
-    const newFlow: Flow = {
-      id: `pkt-${Date.now()}`,
-      srcIp: isLeak ? MOCK_REAL_ISP_IP : '10.0.0.1',
-      srcPort: Math.floor(Math.random() * 60000) + 1024,
-      dstIp: isExternal ? '142.250.190.46' : '192.168.1.1',
-      dstPort: isExternal ? 443 : 80,
-      protocol: 'TCP',
-      status: isLeak ? 'leaking' : 'active',
-      bytes: Math.floor(Math.random() * 800) + 40,
-      packets: 1,
-      process: isLeak ? 'unknown-binary' : 'com.android.chrome',
-      interface: isLeak ? 'wlan0' : 'tun0',
-      srcLat: 39.9042, srcLng: 116.4074,
-      dstLat: isExternal ? 35.6762 : 39.9142, 
-      dstLng: isExternal ? 139.6503 : 116.4174,
-      timestamp: meta.timestamp,
-      metadata: meta
-    };
-
-    this.flows = [newFlow, ...this.flows].slice(0, 500); 
-    this.flowListeners.forEach(l => l(this.flows));
+    // 维护连接池 (Pooling)
+    this.flows = [filteredData, ...this.flows].slice(0, 500); 
+    
+    // 降频分发 (Throttling UI updates)
+    this.throttleNotify();
   }
+
+  private static lastNotifyTime = 0;
+  private static throttleNotify() {
+    const now = Date.now();
+    if (now - this.lastNotifyTime > 800) { // P1: UI 高频刷新限流 (800ms)
+      this.flowListeners.forEach(l => l(this.flows));
+      this.lastNotifyTime = now;
+    }
+  }
+
+  private static enrichMetadata(data: Partial<Flow>): Flow {
+    const timestamp = new Date().toISOString();
+    return {
+      ...data,
+      id: `pkt-${Math.random().toString(36).substr(2, 9)}`,
+      srcLat: 39.9042, srcLng: 116.4074,
+      dstLat: Math.random() > 0.5 ? 35.6762 : 39.9142, 
+      dstLng: Math.random() > 0.5 ? 139.6503 : 116.4174,
+      timestamp,
+      metadata: {
+        source: this.state.sourceType,
+        timestamp,
+        reliability: this.state.capability.hasRoot ? 0.95 : 0.6
+      }
+    } as Flow;
+  }
+
+  private static applyFiltering(flow: Flow): Flow {
+    // 模拟防火墙规则匹配 (P2: 性能限流预留)
+    if (flow.dstIp === '1.1.1.1') {
+      flow.status = 'dropped';
+    }
+    return flow;
+  }
+
 
   static getState() { return this.state; }
 }
