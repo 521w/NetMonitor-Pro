@@ -10,7 +10,10 @@ import {
   Globe,
   Cpu,
   Terminal,
-  Brain
+  Brain,
+  Play,
+  Square,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   XAxis, 
@@ -37,11 +40,12 @@ import { SecurityShield } from './components/SecurityShield';
 
 import { useNetworkData } from './hooks/useNetworkData';
 import { RootExecutor } from './services/rootExecutor';
+import { CaptureService } from './services/captureService';
 
 import { fetchPublicIP, IPInfo, MOCK_REAL_ISP_IP, MOCK_REAL_ISP_LOC } from './services/ipService';
 
 export default function App() {
-  const { flows, stats, history, error, trends, setFlows } = useNetworkData(); 
+  const { flows, stats, history, error, trends, serviceState, setFlows } = useNetworkData(); 
   const [search, setSearch] = useState('');
   const [exitIpInfo, setExitIpInfo] = useState<IPInfo | null>(null);
 
@@ -53,7 +57,7 @@ export default function App() {
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
-  const [notifications, setNotifications] = useState(3);
+  const [notifications, setNotifications] = useState(0);
   const [showError, setShowError] = useState(false);
   const [mobileView, setMobileView] = useState<'monitor' | 'table'>('monitor');
 
@@ -61,10 +65,22 @@ export default function App() {
     if (error) setShowError(true);
   }, [error]);
 
+  const handleExportPCAP = () => {
+    alert('正在生成内核流量审计归档 (PCAP)...');
+  };
+
+  const filteredFlows = useMemo(() => {
+    return flows.filter(f => 
+      f.srcIp.includes(search) || 
+      f.dstIp.includes(search) || 
+      f.process.toLowerCase().includes(search.toLowerCase()) ||
+      f.interface.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [flows, search]);
+
   const runAiAnalysis = async () => {
     setAiLoading(true);
     try {
-      // 模拟本地启发式分析逻辑 (取代远程服务端 API)
       await new Promise(r => setTimeout(r, 1500));
       const leaks = flows.filter(f => f.interface === 'wlan0');
       
@@ -91,23 +107,10 @@ export default function App() {
     const flow = flows.find(f => f.id === id);
     if (!flow) return;
 
-    await RootExecutor.exec(`su -c kill -9 ${flow.process}_PID`);
+    await RootExecutor.exec(`kill -9 ${flow.process}_PID`);
     alert(`Root: 进程 [${flow.process}] 已通过内核信号强制阻断。`);
     setSelectedFlow(null);
   };
-
-  const handleExportPCAP = () => {
-    alert('正在生成 eBPF 流量归档 (PCAP)... 文件已保存至桌面。');
-  };
-
-  const filteredFlows = useMemo(() => {
-    return flows.filter(f => 
-      f.srcIp.includes(search) || 
-      f.dstIp.includes(search) || 
-      f.process.toLowerCase().includes(search.toLowerCase()) ||
-      f.interface.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [flows, search]);
 
   return (
     <div className="min-h-screen bg-[#02010a] text-slate-50 font-sans selection:bg-rose-500/30">
@@ -121,7 +124,7 @@ export default function App() {
             <h1 className="font-bold text-sm md:text-lg tracking-tight uppercase tracking-tighter">LeakAudit <span className="text-rose-500 font-mono">内核版</span></h1>
             <div className="flex items-center gap-1 md:gap-2 text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Real-time Privacy Protection
+              Real-time Kernel Audit
             </div>
           </div>
         </div>
@@ -139,23 +142,95 @@ export default function App() {
           </div>
           <button 
             onClick={() => setNotifications(0)}
-            className="p-1.5 md:p-2 text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-lg transition-all relative"
+            className="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center relative transition-colors"
           >
-            <Bell size={18} />
+            <Activity size={20} className="text-slate-400" />
             {notifications > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-[#02010a]" />
+              <span className="absolute top-2 right-2 w-4 h-4 bg-rose-500 rounded-full text-[8px] font-bold flex items-center justify-center border-2 border-[#02010a]">
+                {notifications}
+              </span>
             )}
           </button>
         </div>
       </nav>
 
-      <main className="p-4 md:p-8 max-w-[1700px] mx-auto space-y-6 md:space-y-8">
-        {/* Real IP vs Proxy IP Audit Panel */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
-                <Globe size={20} />
+      {/* Main Content */}
+      <main className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-8">
+        
+        {/* Service Controls & Status */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
+          <div className="lg:col-span-3 technical-card p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-6">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-inner ${
+                serviceState.captureStatus === 'CAPTURING' ? 'bg-emerald-500/10 text-emerald-500 animate-pulse' : 'bg-white/5 text-slate-500'
+              }`}>
+                <Zap size={28} />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold">内核驱动状态: {serviceState.captureStatus}</h2>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                    serviceState.deviceStatus === 'ROOT_READY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                  }`}>
+                    {serviceState.deviceStatus}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 font-mono">
+                  活跃网卡: <span className="text-white">{serviceState.activeInterface || '探测中...'}</span> 
+                  {error && <span className="text-rose-500 ml-3">| 错误: {error}</span>}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              {serviceState.captureStatus === 'CAPTURING' ? (
+                <button 
+                  onClick={() => CaptureService.stopCapture()}
+                  className="flex-1 md:flex-none px-6 py-2.5 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-bold transition-all shadow-lg shadow-rose-600/20 flex items-center justify-center gap-2"
+                >
+                  <Square size={14} /> 停止审计
+                </button>
+              ) : (
+                <button 
+                  onClick={() => CaptureService.startCapture()}
+                  disabled={serviceState.deviceStatus !== 'ROOT_READY'}
+                  className="flex-1 md:flex-none px-10 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-xs font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
+                >
+                  <Play size={14} /> 启动内核实时扫描
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="lg:col-span-1 technical-card p-6 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">内核资源占用</span>
+              <Cpu size={14} className="text-slate-500" />
+            </div>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-slate-400">模块内存</span>
+                  <span className="text-white font-mono">{stats?.memoryUsage || '0MB'}</span>
+                </div>
+                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-500 w-[20%]" />
+                </div>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400">运行时长</span>
+                <span className="text-emerald-400 font-mono">{stats?.uptime || 0}s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Global IP Audit */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          <div className="technical-card p-6 flex items-center justify-between bg-gradient-to-br from-slate-900 to-indigo-950/20">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                <Globe size={20} className="text-slate-400" />
               </div>
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">本地真实 IP (ISP)</p>
@@ -168,14 +243,14 @@ export default function App() {
               </div>
             </div>
             <div className="text-right">
-              <span className="px-2 py-0.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 rounded text-[10px] font-bold">需脱敏</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold font-mono">TRUSTED</span>
             </div>
           </div>
-          
-          <div className="p-4 bg-indigo-500/5 rounded-xl border border-indigo-500/20 flex items-center justify-between shadow-[0_0_20px_rgba(79,70,229,0.05)]">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-                <Shield size={20} />
+
+          <div className="technical-card p-6 flex items-center justify-between bg-gradient-to-br from-slate-900 to-indigo-950/20">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                <Zap size={20} className="text-indigo-400" />
               </div>
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">当前出口 IP (Exit)</p>
@@ -188,7 +263,7 @@ export default function App() {
               </div>
             </div>
             <div className="text-right">
-              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[10px] font-bold">已加密</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-bold font-mono">TUNNELED</span>
             </div>
           </div>
         </div>
@@ -352,7 +427,7 @@ export default function App() {
             <div className={cn(mobileView !== 'table' && "hidden lg:block")}>
               <FlowTable 
                 flows={filteredFlows} 
-                aiAnalysis={aiAnalysis} 
+                aiAnalysis={aiAnalysis}
                 onSelectFlow={setSelectedFlow} 
                 onExport={handleExportPCAP}
               />

@@ -1,3 +1,13 @@
+export type DeviceStatus = 'UNCHECKED' | 'ROOT_READY' | 'ROOT_DENIED' | 'DRIVER_ERROR';
+export type CaptureStatus = 'IDLE' | 'PROBING' | 'CAPTURING' | 'STOPPED';
+
+export interface KernelServiceState {
+  deviceStatus: DeviceStatus;
+  captureStatus: CaptureStatus;
+  activeInterface: string | null;
+  lastError: string | null;
+}
+
 export interface Flow {
   id: string;
   srcIp: string;
@@ -9,7 +19,7 @@ export interface Flow {
   dstLat: number;
   dstLng: number;
   protocol: string;
-  status: 'active' | 'dormant' | 'dropped';
+  status: 'active' | 'closed' | 'leaking';
   bytes: number;
   packets: number;
   process: string;
