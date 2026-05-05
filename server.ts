@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -52,6 +53,7 @@ export async function startServer() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
   // Middleware
+  app.use(cors());
   app.use(express.json());
 
 // Persistent storage for smoother data transitions
