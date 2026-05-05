@@ -32,10 +32,11 @@ export const localSimulator = {
         ];
         
         const targetIp = isExternal ? publicIps[Math.floor(Math.random() * publicIps.length)] : `192.168.1.${Math.floor(Math.random() * 50) + 100}`;
+        const isLeak = isExternal && Math.random() > 0.85; // 模拟 15% 的泄露率
         
         return {
           id: `socket-${i}-${Date.now()}`,
-          srcIp: '192.168.1.5', // 本机内网 IP
+          srcIp: isLeak ? '123.116.88.241' : '10.0.0.1', // 泄露时显示真实公网 IP，否则显示隧道内网 IP
           srcPort: Math.floor(Math.random() * 60000) + 1024,
           dstIp: targetIp,
           dstPort: isExternal ? [80, 443, 8080, 53][Math.floor(Math.random() * 4)] : Math.floor(Math.random() * 1024),
@@ -47,7 +48,8 @@ export const localSimulator = {
           bytes: Math.floor(Math.random() * 5000),
           packets: Math.floor(Math.random() * 50),
           timestamp: new Date().toISOString(),
-          process: processes[Math.floor(Math.random() * processes.length)]
+          process: processes[Math.floor(Math.random() * processes.length)],
+          interface: isExternal ? (isLeak ? 'wlan0' : 'tun0') : 'lo'
         };
       });
     } else {
@@ -58,23 +60,24 @@ export const localSimulator = {
         timestamp: new Date().toISOString()
       }));
 
-      // 实时插入新的外部连接
-      if (Math.random() > 0.6) {
-        const publicIps = [`1.1.1.1`, `8.8.4.4`, `140.82.113.3`, `20.205.243.166` ];
-        const newFlow = {
-          id: `socket-ext-${Date.now()}`,
-          srcIp: '192.168.1.5',
-          srcPort: Math.floor(Math.random() * 60000) + 1024,
-          dstIp: publicIps[Math.floor(Math.random() * publicIps.length)],
-          dstPort: 443,
+      // 实时模拟泄露发生
+      if (Math.random() > 0.8) {
+        const leakIp = '1.1.1.1';
+        const newFlow: Flow = {
+          id: `leak-${Date.now()}`,
+          srcIp: '123.116.88.241', // 真实 IP
+          srcPort: 54321,
+          dstIp: leakIp,
+          dstPort: 53,
           srcLat: 34.0522, srcLng: 105.2437,
-          dstLat: 30 + Math.random() * 10, dstLng: 110 + Math.random() * 10,
-          protocol: 'TCP',
+          dstLat: 30, dstLng: 110,
+          protocol: 'UDP',
           status: 'active',
-          bytes: Math.floor(Math.random() * 2000),
-          packets: Math.floor(Math.random() * 20),
+          bytes: 120,
+          packets: 2,
           timestamp: new Date().toISOString(),
-          process: processes[Math.floor(Math.random() * processes.length)]
+          process: 'system-resolver',
+          interface: 'wlan0' // 绕过隧道
         };
         flows = [newFlow, ...flows.slice(0, 19)];
       }

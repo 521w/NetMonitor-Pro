@@ -67,18 +67,22 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
                     <td className="px-6 py-4">
                       <span className={cn(
                         "text-[10px] px-2 py-0.5 rounded font-mono font-bold",
-                        isLocal ? "text-slate-500 bg-white/5" : "text-indigo-400 bg-indigo-400/10 border border-indigo-400/20"
+                        flow.interface === 'tun0' ? "text-emerald-400 bg-emerald-400/10 border border-emerald-400/20" : 
+                        flow.interface === 'lo' ? "text-slate-500 bg-white/5" :
+                        "text-rose-500 bg-rose-500/10 border border-rose-500/20 animate-pulse ring-1 ring-rose-500/50"
                       )}>
-                        {isLocal ? 'DIRECT' : 'TUNNELED'}
+                        {flow.interface === 'tun0' ? 'SECURE (TUN)' : 
+                         flow.interface === 'lo' ? 'LOCAL' : 
+                         'LEAK (PHYSICAL)'}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-mono text-blue-400">
                       <div className={cn(
                         "flex flex-col transition-all p-1 rounded",
-                        isSrcSuspicious && "bg-rose-500/20 ring-1 ring-rose-500/50"
+                        flow.interface === 'wlan0' && "bg-rose-500/10 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.1)]"
                       )}>
                         <span>{flow.srcIp}</span>
-                        <span className="text-[10px] text-slate-500">Port: {flow.srcPort}</span>
+                        <span className="text-[10px] text-slate-500">Intf: {flow.interface}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center text-slate-600">→</td>

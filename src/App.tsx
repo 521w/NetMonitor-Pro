@@ -324,6 +324,7 @@ export default function App() {
               analysis={aiAnalysis} 
               onAnalyze={runAiAnalysis} 
               loading={aiLoading} 
+              flows={flows}
             />
 
             {/* Connection Topology Visualization */}
