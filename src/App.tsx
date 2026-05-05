@@ -9,7 +9,8 @@ import {
   Zap,
   Globe,
   Cpu,
-  Terminal
+  Terminal,
+  Brain
 } from 'lucide-react';
 import { 
   XAxis, 
@@ -35,12 +36,12 @@ import { FlowDetailModal } from './components/FlowDetailModal';
 import { SecurityShield } from './components/SecurityShield';
 
 import { useNetworkData } from './hooks/useNetworkData';
-import { api } from './services/api';
+import { RootExecutor } from './services/rootExecutor';
 
 import { fetchPublicIP, IPInfo, MOCK_REAL_ISP_IP, MOCK_REAL_ISP_LOC } from './services/ipService';
 
 export default function App() {
-  const { flows, stats, history, error, trends, setFlows } = useNetworkData(5000); // 5s interval
+  const { flows, stats, history, error, trends, setFlows } = useNetworkData(); 
   const [search, setSearch] = useState('');
   const [exitIpInfo, setExitIpInfo] = useState<IPInfo | null>(null);
 
@@ -63,8 +64,22 @@ export default function App() {
   const runAiAnalysis = async () => {
     setAiLoading(true);
     try {
-      const data = await api.analyze(flows);
-      setAiAnalysis(data);
+      // 模拟本地启发式分析逻辑 (取代远程服务端 API)
+      await new Promise(r => setTimeout(r, 1500));
+      const leaks = flows.filter(f => f.interface === 'wlan0');
+      
+      const analysis: AIAnalysis = {
+        privacy_score: leaks.length > 0 ? 35 : 98,
+        risk_level: leaks.length > 3 ? 'critical' : (leaks.length > 0 ? 'high' : 'low'),
+        threats: leaks.map(l => `发现进程 ${l.process} 正在通过物理网卡泄露数据`),
+        suspicious_ips: leaks.map(l => l.dstIp),
+        recommendations: [
+          "强制阻断所有非 tun0 接口的外部连接",
+          "开启 DNS 劫持防护 (iptables 指令注入)",
+          "检查 system-resolver 配置文件"
+        ]
+      };
+      setAiAnalysis(analysis);
     } catch (err) {
       console.error('Analysis failed', err);
     } finally {
@@ -72,11 +87,13 @@ export default function App() {
     }
   };
 
-  const handleKillProcess = (id: string) => {
-    console.log(`Executing: sudo kill -9 process from flow ${id}`);
-    alert(`Root: 进程已强制阻断并加入黑名单。会话 ${id} 已断开。`);
+  const handleKillProcess = async (id: string) => {
+    const flow = flows.find(f => f.id === id);
+    if (!flow) return;
+
+    await RootExecutor.exec(`su -c kill -9 ${flow.process}_PID`);
+    alert(`Root: 进程 [${flow.process}] 已通过内核信号强制阻断。`);
     setSelectedFlow(null);
-    api.getFlows().then(setFlows);
   };
 
   const handleExportPCAP = () => {

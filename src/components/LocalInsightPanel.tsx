@@ -74,6 +74,21 @@ export const LocalInsightPanel = ({ analysis, onAnalyze, loading, flows }: Local
         </div>
 
         <div className="space-y-2">
+          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">内核审计策略建议</h4>
+          <div className="space-y-1.5">
+            {analysis?.recommendations.map((rec, i) => (
+              <div key={i} className="flex gap-2 p-2 rounded-lg bg-white/5 border border-white/5 items-start">
+                <span className="text-indigo-400 mt-0.5"><Zap size={10} /></span>
+                <p className="text-[10px] text-slate-300 leading-tight">{rec}</p>
+              </div>
+            ))}
+            {!analysis && [1, 2].map(i => (
+              <div key={i} className="h-8 bg-white/5 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
           <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">专项泄露巡检</h4>
           <div className="grid grid-cols-2 gap-2">
             {[

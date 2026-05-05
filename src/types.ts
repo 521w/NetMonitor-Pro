@@ -21,15 +21,19 @@ export interface NetworkStats {
   bps: number;
   pps: number;
   activeConnections: number;
+  totalPackets: number;
+  totalBytes: number;
   cpuUsage: string;
   uptime: number;
   memoryUsage: string;
 }
 
 export interface AIAnalysis {
-  threat_level: 'low' | 'medium' | 'high';
-  summary: string;
+  privacy_score: number;
+  risk_level: 'low' | 'high' | 'critical';
+  threats: string[];
   suspicious_ips: string[];
+  recommendations: string[];
 }
 
 export interface HistoryPoint {
