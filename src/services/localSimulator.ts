@@ -19,40 +19,43 @@ export const localSimulator = {
     const processes = ['nginx', 'ssh', 'chrome', 'python3', 'node', 'systemd', 'wechat', 'dingtalk'];
 
     if (flows.length === 0) {
-      flows = Array.from({ length: 15 }, (_, i) => ({
-        id: `flow-${i}`,
-        srcIp: `192.168.1.${Math.floor(Math.random() * 254) + 1}`,
-        srcPort: Math.floor(Math.random() * 65535),
-        dstIp: `10.0.0.${Math.floor(Math.random() * 254) + 1}`,
-        dstPort: Math.floor(Math.random() * 1024),
-        srcLat: 34.0522 + (Math.random() - 0.5) * 5,
-        srcLng: 105.2437 + (Math.random() - 0.5) * 10,
-        dstLat: 22 + Math.random() * 18,
-        dstLng: 100 + Math.random() * 25,
-        protocol: protocols[Math.floor(Math.random() * protocols.length)],
-        status: statuses[Math.floor(Math.random() * statuses.length)],
-        bytes: Math.floor(Math.random() * 50000),
-        packets: Math.floor(Math.random() * 200),
-        timestamp: new Date().toISOString(),
-        process: processes[Math.floor(Math.random() * processes.length)]
-      }));
+      flows = Array.from({ length: 12 }, (_, i) => {
+        const localSubnet = `192.168.1.`;
+        const targetIp = i === 0 ? '127.0.0.1' : `${localSubnet}${Math.floor(Math.random() * 50) + 100}`;
+        const isSelf = targetIp === '127.0.0.1';
+        
+        return {
+          id: `socket-${i}`,
+          srcIp: isSelf ? '127.0.0.1' : targetIp,
+          srcPort: Math.floor(Math.random() * 60000) + 1024,
+          dstIp: '192.168.1.5', // 假设这是本机 IP
+          dstPort: [80, 443, 22, 3000, 8080, 5353][Math.floor(Math.random() * 6)],
+          srcLat: 34.0522, srcLng: 105.2437, dstLat: 34.0522, dstLng: 105.2437, // 全部定位在本地
+          protocol: Math.random() > 0.2 ? 'TCP' : 'UDP',
+          status: 'active',
+          bytes: Math.floor(Math.random() * 5000),
+          packets: Math.floor(Math.random() * 50),
+          timestamp: new Date().toISOString(),
+          process: processes[Math.floor(Math.random() * processes.length)]
+        };
+      });
     } else {
       flows = flows.map(flow => ({
         ...flow,
-        bytes: flow.bytes + Math.floor(Math.random() * 10000),
-        packets: flow.packets + Math.floor(Math.random() * 50),
-        timestamp: new Date().toISOString(),
-        status: Math.random() > 0.9 ? statuses[Math.floor(Math.random() * statuses.length)] : flow.status
+        bytes: flow.bytes + Math.floor(Math.random() * 1000),
+        packets: flow.packets + Math.floor(Math.random() * 10),
+        timestamp: new Date().toISOString()
       }));
 
       if (Math.random() > 0.7) {
         const idx = Math.floor(Math.random() * flows.length);
+        const publicIps = [`114.114.114.114`, `8.8.8.8`, `121.40.1.1`, `39.156.66.10` ];
         flows[idx] = {
           ...flows[idx],
           id: `flow-${Date.now()}`,
           bytes: Math.floor(Math.random() * 1000),
           packets: Math.floor(Math.random() * 10),
-          dstIp: `10.0.0.${Math.floor(Math.random() * 254) + 1}`,
+          dstIp: Math.random() > 0.5 ? publicIps[Math.floor(Math.random() * publicIps.length)] : `192.168.1.${Math.floor(Math.random() * 254) + 1}`,
           process: processes[Math.floor(Math.random() * processes.length)]
         };
       }

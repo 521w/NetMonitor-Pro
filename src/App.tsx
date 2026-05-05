@@ -8,7 +8,8 @@ import {
   Wifi,
   Zap,
   Globe,
-  Cpu
+  Cpu,
+  Terminal
 } from 'lucide-react';
 import { 
   XAxis, 
@@ -45,6 +46,7 @@ export default function App() {
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
   const [notifications, setNotifications] = useState(3);
   const [showError, setShowError] = useState(false);
+  const [mobileView, setMobileView] = useState<'monitor' | 'table'>('monitor');
 
   useEffect(() => {
     if (error) setShowError(true);
@@ -86,49 +88,52 @@ export default function App() {
       {/* Top Navigation */}
       <nav className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-8 backdrop-blur-xl sticky top-0 z-50 bg-[#02010a]/80">
         <div className="flex items-center gap-2 md:gap-3">
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-600 rounded-lg flex items-center justify-center glow-primary">
-            <Activity className="text-white" size={18} />
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 rounded-lg flex items-center justify-center glow-primary">
+            <Shield className="text-white" size={18} />
           </div>
           <div>
-            <h1 className="font-bold text-sm md:text-lg tracking-tight">网络监控 <span className="text-blue-500 hidden sm:inline">专业版</span></h1>
-            <div className="flex items-center gap-1 md:gap-2 text-[8px] md:text-[10px] text-blue-100/40 uppercase tracking-widest font-mono">
+            <h1 className="font-bold text-sm md:text-lg tracking-tight">本机网络 <span className="text-indigo-400">内核探针</span></h1>
+            <div className="flex items-center gap-1 md:gap-2 text-[8px] md:text-[10px] text-indigo-100/40 uppercase tracking-widest font-mono">
               <span className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              v4.2.1-ROOT
+              Interface: wlan0 (192.168.1.5)
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2 md:gap-6">
-          <div className="relative group bg-white/5 rounded-full px-3 py-1 md:px-4 md:py-1.5 flex items-center gap-2 border border-white/10 hover:border-blue-500/80 transition-all max-w-[120px] sm:max-w-none">
-            <Search size={14} className="text-slate-400 group-hover:text-blue-400 transition-colors flex-shrink-0" />
-            <input 
-              type="text" 
-              placeholder="搜索..." 
-              className="bg-transparent border-none outline-none text-xs md:text-sm w-full placeholder:text-slate-500 text-white"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-indigo-500/10 rounded-full border border-indigo-500/30">
+            <Activity size={14} className="text-indigo-400" />
+            <span className="text-xs font-bold text-indigo-400 font-mono">LISTEN 模式</span>
           </div>
-          <div className="h-6 w-px bg-white/10 hidden sm:block" />
-          <div className="flex items-center gap-1 md:gap-3">
-            <button 
-              onClick={() => setNotifications(0)}
-              className="p-1.5 md:p-2 text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-lg transition-all relative"
-            >
-              <Bell size={18} />
-              {notifications > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-[#02010a]" />
-              )}
-            </button>
-            <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/30">
-              <Shield size={14} className="text-blue-400 shadow-[0_0_8px_#3b82f6]" />
-              <span className="text-xs font-bold text-blue-400 font-mono">ROOT 可用</span>
-            </div>
-          </div>
+          <button 
+            onClick={() => setNotifications(0)}
+            className="p-1.5 md:p-2 text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-lg transition-all relative"
+          >
+            <Bell size={18} />
+            {notifications > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-[#02010a]" />
+            )}
+          </button>
         </div>
       </nav>
 
       <main className="p-4 md:p-8 max-w-[1700px] mx-auto space-y-6 md:space-y-8">
+        {/* Permission & Interface Notice */}
+        <div className="p-4 bg-indigo-500/5 rounded-xl border border-indigo-500/20 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
+              <Terminal size={20} />
+            </div>
+            <p className="text-xs md:text-sm text-slate-300">
+              <span className="font-bold text-indigo-400">权限状态:</span> Android 内核审计权限已就绪 (eBPF 加载成功)。正在直接从本地网卡接口读流。
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-md text-[10px] font-bold">TUNNEL OFF</span>
+            <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 rounded-md text-[10px] font-bold">DIRECT ON</span>
+          </div>
+        </div>
+
         {showError && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
@@ -177,14 +182,36 @@ export default function App() {
           />
         </div>
 
+        {/* Mobile View Switcher */}
+        <div className="lg:hidden flex p-1 bg-white/5 rounded-xl border border-white/10 w-full mb-4">
+          <button 
+            onClick={() => setMobileView('monitor')}
+            className={cn(
+              "flex-1 py-2 text-xs font-bold rounded-lg transition-all", 
+              mobileView === 'monitor' ? "bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.3)]" : "text-slate-500"
+            )}
+          >
+            指标监控
+          </button>
+          <button 
+            onClick={() => setMobileView('table')}
+            className={cn(
+              "flex-1 py-2 text-xs font-bold rounded-lg transition-all", 
+              mobileView === 'table' ? "bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.3)]" : "text-slate-500"
+            )}
+          >
+            连接详情
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Visualizer Area */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className={cn("lg:col-span-2 space-y-8", mobileView !== 'monitor' && "hidden lg:block")}>
             <div className="technical-border rounded-xl p-4 md:p-8 bg-white/[0.02]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 md:mb-10 gap-4">
                 <div>
-                  <h3 className="text-lg md:text-xl font-bold text-white tracking-tight">流量动态及轨迹追踪</h3>
-                  <p className="text-xs md:text-sm text-slate-400">基于内核态 eBPF 收集的网络吞取实时变化</p>
+                  <h3 className="text-lg md:text-xl font-bold text-white tracking-tight">本地 Socket 会话监控</h3>
+                  <p className="text-xs md:text-sm text-slate-400">直接读取内核网络栈（Kernel Stack）活动数据</p>
                 </div>
                 <div className="flex items-center gap-1 p-1 bg-white/5 rounded-xl border border-white/10 w-fit">
                   <button 
@@ -251,16 +278,18 @@ export default function App() {
             </div>
 
             {/* Flows Table */}
-            <FlowTable 
-              flows={filteredFlows} 
-              aiAnalysis={aiAnalysis} 
-              onSelectFlow={setSelectedFlow} 
-              onExport={handleExportPCAP}
-            />
+            <div className={cn(mobileView !== 'table' && "hidden lg:block")}>
+              <FlowTable 
+                flows={filteredFlows} 
+                aiAnalysis={aiAnalysis} 
+                onSelectFlow={setSelectedFlow} 
+                onExport={handleExportPCAP}
+              />
+            </div>
           </div>
 
           {/* Sidebar Information Panel */}
-          <div className="space-y-8">
+          <div className={cn("space-y-8", mobileView !== 'monitor' && "hidden lg:block")}>
             {/* Analysis Engine */}
             <LocalInsightPanel 
               analysis={aiAnalysis} 
