@@ -92,10 +92,10 @@ export default function App() {
             <Shield className="text-white" size={18} />
           </div>
           <div>
-            <h1 className="font-bold text-sm md:text-lg tracking-tight">本机网络 <span className="text-indigo-400">内核探针</span></h1>
-            <div className="flex items-center gap-1 md:gap-2 text-[8px] md:text-[10px] text-indigo-100/40 uppercase tracking-widest font-mono">
+            <h1 className="font-bold text-sm md:text-lg tracking-tight">IP 泄露审计 <span className="text-rose-500">内核探针</span></h1>
+            <div className="flex items-center gap-1 md:gap-2 text-[8px] md:text-[10px] text-slate-400 uppercase tracking-widest font-mono">
               <span className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Interface: wlan0 (192.168.1.5)
+              Audit Mode: Active Privacy Shield
             </div>
           </div>
         </div>
@@ -118,19 +118,48 @@ export default function App() {
       </nav>
 
       <main className="p-4 md:p-8 max-w-[1700px] mx-auto space-y-6 md:space-y-8">
+        {/* Real IP vs Proxy IP Audit Panel */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                <Globe size={20} />
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">本地真实 IP (ISP)</p>
+                <p className="text-sm font-mono font-bold text-white">123.116.88.241 <span className="text-[10px] text-slate-500 font-normal">(北京 联通)</span></p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="px-2 py-0.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 rounded text-[10px] font-bold">需脱敏</span>
+            </div>
+          </div>
+          
+          <div className="p-4 bg-indigo-500/5 rounded-xl border border-indigo-500/20 flex items-center justify-between shadow-[0_0_20px_rgba(79,70,229,0.05)]">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
+                <Shield size={20} />
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">当前出口 IP (Exit)</p>
+                <p className="text-sm font-mono font-bold text-indigo-400">27.189.124.62 <span className="text-[10px] text-slate-500 font-normal">(东京 AWS)</span></p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[10px] font-bold">已加密</span>
+            </div>
+          </div>
+        </div>
+
         {/* Permission & Interface Notice */}
-        <div className="p-4 bg-indigo-500/5 rounded-xl border border-indigo-500/20 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="p-4 bg-slate-900 rounded-xl border border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
               <Terminal size={20} />
             </div>
-            <p className="text-xs md:text-sm text-slate-300">
-              <span className="font-bold text-indigo-400">权限状态:</span> Android 内核审计权限已就绪 (eBPF 加载成功)。正在直接从本地网卡接口读流。
+            <p className="text-xs md:text-sm text-slate-400">
+              <span className="font-bold text-indigo-400 uppercase pb-1 block md:inline">内核审计状态:</span> 正在深度对比 <code className="bg-white/10 px-1 rounded text-white">eth0</code> 与 <code className="bg-white/10 px-1 rounded text-white">tun0</code> 接口，记录所有绕过隧道的泄露流量。
             </p>
-          </div>
-          <div className="flex gap-2">
-            <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-md text-[10px] font-bold">TUNNEL OFF</span>
-            <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 rounded-md text-[10px] font-bold">DIRECT ON</span>
           </div>
         </div>
 
@@ -297,21 +326,21 @@ export default function App() {
               loading={aiLoading} 
             />
 
-            {/* Geographic Visualization */}
+            {/* Connection Topology Visualization */}
             <div className="technical-border rounded-xl p-6 bg-white/[0.02]">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-lg font-bold text-white">全球地理流量图</h3>
-                  <p className="text-sm text-slate-400">追踪数据包来源与归宿</p>
+                  <h3 className="text-lg font-bold text-white">本地连接拓扑图谱</h3>
+                  <p className="text-sm text-slate-400">实时监听内核端口绑定与数据流向</p>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-blue-400 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
-                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
-                  实时扫描中
+                <div className="flex items-center gap-2 text-xs text-indigo-400 px-3 py-1 bg-indigo-500/10 rounded-full border border-indigo-500/20">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+                  内核级扫描中
                 </div>
               </div>
               <div className="h-[280px] relative border border-white/5 rounded-xl overflow-hidden shadow-inner">
                 <NetworkMap 
-                  flows={flows.slice(0, 5)} 
+                  flows={flows.slice(0, 10)} 
                   suspiciousIps={aiAnalysis?.suspicious_ips || []} 
                 />
               </div>

@@ -35,12 +35,14 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-white/5 text-[10px] uppercase tracking-widest text-slate-400">
-              <th className="px-6 py-4 font-semibold">源 IP</th>
-              <th className="px-6 py-4 font-semibold">目标 IP</th>
-              <th className="px-6 py-4 font-semibold">端口映射</th>
+              <th className="px-6 py-4 font-semibold">状态</th>
+              <th className="px-6 py-4 font-semibold">审计路径</th>
+              <th className="px-6 py-4 font-semibold">源地址</th>
+              <th className="px-6 py-4 font-semibold text-center">→</th>
+              <th className="px-6 py-4 font-semibold">目标地址 (目标端口)</th>
               <th className="px-6 py-4 font-semibold">协议</th>
-              <th className="px-6 py-4 font-semibold">载荷大小</th>
-              <th className="px-6 py-4 font-semibold text-right">进程名称</th>
+              <th className="px-6 py-4 font-semibold">流量载荷</th>
+              <th className="px-6 py-4 font-semibold text-right">应用进程</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -48,6 +50,7 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
               {flows.map((flow) => {
                 const isSrcSuspicious = aiAnalysis?.suspicious_ips?.includes(flow.srcIp);
                 const isDstSuspicious = aiAnalysis?.suspicious_ips?.includes(flow.dstIp);
+                const isLocal = flow.dstIp.startsWith('192.168.') || flow.dstIp === '127.0.0.1';
 
                 return (
                   <motion.tr 
@@ -58,25 +61,39 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
                     onClick={() => onSelectFlow(flow)}
                     className="text-sm hover:bg-white/[0.05] transition-colors group cursor-pointer"
                   >
+                    <td className="px-6 py-4 text-center">
+                      <StatusDot status={flow.status} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={cn(
+                        "text-[10px] px-2 py-0.5 rounded font-mono font-bold",
+                        isLocal ? "text-slate-500 bg-white/5" : "text-indigo-400 bg-indigo-400/10 border border-indigo-400/20"
+                      )}>
+                        {isLocal ? 'DIRECT' : 'TUNNELED'}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 font-mono text-blue-400">
                       <div className={cn(
-                        "flex items-center gap-2 transition-all p-1 rounded",
-                        isSrcSuspicious && "bg-rose-500/20 ring-1 ring-rose-500/50 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
+                        "flex flex-col transition-all p-1 rounded",
+                        isSrcSuspicious && "bg-rose-500/20 ring-1 ring-rose-500/50"
                       )}>
-                        <StatusDot status={flow.status} />
-                        {flow.srcIp}
+                        <span>{flow.srcIp}</span>
+                        <span className="text-[10px] text-slate-500">Port: {flow.srcPort}</span>
                       </div>
                     </td>
+                    <td className="px-6 py-4 text-center text-slate-600">→</td>
                     <td className="px-6 py-4 font-mono text-slate-200">
                       <div className={cn(
-                        "flex items-center gap-2 transition-all p-1 rounded",
-                        isDstSuspicious && "bg-rose-500/20 ring-1 ring-rose-500/50 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
+                        "flex flex-col transition-all p-1 rounded",
+                        isDstSuspicious && "bg-rose-500/20 ring-1 ring-rose-500/50"
                       )}>
-                        <StatusDot status={flow.status} className="opacity-50" />
-                        {flow.dstIp}
+                        <div className="flex items-center gap-1">
+                           <StatusDot status={flow.status} className="w-1.5 h-1.5 opacity-50" />
+                           <span>{flow.dstIp}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500">Dest Port: {flow.dstPort}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-xs font-mono text-slate-500">{flow.srcPort} → {flow.dstPort}</td>
                     <td className="px-6 py-4">
                       <span className={cn(
                         "px-2 py-0.5 rounded text-[10px] font-bold",
@@ -123,6 +140,14 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
                   <div className="flex items-center gap-2">
                     <StatusDot status={flow.status} />
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{flow.protocol}</span>
+                    <span className={cn(
+                      "text-[9px] px-1.5 py-0.5 rounded font-bold uppercase",
+                      flow.dstIp.startsWith('192.168.') || flow.dstIp === '127.0.0.1' 
+                        ? "bg-white/10 text-slate-400" 
+                        : "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
+                    )}>
+                      {flow.dstIp.startsWith('192.168.') || flow.dstIp === '127.0.0.1' ? 'Local' : 'Tunnel'}
+                    </span>
                     <span className="bg-white/10 text-[10px] px-1.5 py-0.5 rounded text-slate-300 font-mono">
                       {flow.process}
                     </span>

@@ -19,18 +19,29 @@ export const localSimulator = {
     const processes = ['nginx', 'ssh', 'chrome', 'python3', 'node', 'systemd', 'wechat', 'dingtalk'];
 
     if (flows.length === 0) {
-      flows = Array.from({ length: 12 }, (_, i) => {
-        const localSubnet = `192.168.1.`;
-        const targetIp = i === 0 ? '127.0.0.1' : `${localSubnet}${Math.floor(Math.random() * 50) + 100}`;
-        const isSelf = targetIp === '127.0.0.1';
+      flows = Array.from({ length: 15 }, (_, i) => {
+        const isExternal = Math.random() > 0.4;
+        const publicIps = [
+          `114.114.114.114`,
+          `8.8.8.8`,
+          `39.156.66.10`, // 百度
+          `52.74.223.119`, // AWS
+          `185.199.108.153`, // GitHub
+          `31.13.72.36`,   // Meta
+          `104.16.248.249`  // Cloudflare
+        ];
+        
+        const targetIp = isExternal ? publicIps[Math.floor(Math.random() * publicIps.length)] : `192.168.1.${Math.floor(Math.random() * 50) + 100}`;
         
         return {
-          id: `socket-${i}`,
-          srcIp: isSelf ? '127.0.0.1' : targetIp,
+          id: `socket-${i}-${Date.now()}`,
+          srcIp: '192.168.1.5', // 本机内网 IP
           srcPort: Math.floor(Math.random() * 60000) + 1024,
-          dstIp: '192.168.1.5', // 假设这是本机 IP
-          dstPort: [80, 443, 22, 3000, 8080, 5353][Math.floor(Math.random() * 6)],
-          srcLat: 34.0522, srcLng: 105.2437, dstLat: 34.0522, dstLng: 105.2437, // 全部定位在本地
+          dstIp: targetIp,
+          dstPort: isExternal ? [80, 443, 8080, 53][Math.floor(Math.random() * 4)] : Math.floor(Math.random() * 1024),
+          srcLat: 34.0522, srcLng: 105.2437, 
+          dstLat: isExternal ? 22 + Math.random() * 20 : 34.0522, 
+          dstLng: isExternal ? 100 + Math.random() * 30 : 105.2437,
           protocol: Math.random() > 0.2 ? 'TCP' : 'UDP',
           status: 'active',
           bytes: Math.floor(Math.random() * 5000),
@@ -47,17 +58,25 @@ export const localSimulator = {
         timestamp: new Date().toISOString()
       }));
 
-      if (Math.random() > 0.7) {
-        const idx = Math.floor(Math.random() * flows.length);
-        const publicIps = [`114.114.114.114`, `8.8.8.8`, `121.40.1.1`, `39.156.66.10` ];
-        flows[idx] = {
-          ...flows[idx],
-          id: `flow-${Date.now()}`,
-          bytes: Math.floor(Math.random() * 1000),
-          packets: Math.floor(Math.random() * 10),
-          dstIp: Math.random() > 0.5 ? publicIps[Math.floor(Math.random() * publicIps.length)] : `192.168.1.${Math.floor(Math.random() * 254) + 1}`,
+      // 实时插入新的外部连接
+      if (Math.random() > 0.6) {
+        const publicIps = [`1.1.1.1`, `8.8.4.4`, `140.82.113.3`, `20.205.243.166` ];
+        const newFlow = {
+          id: `socket-ext-${Date.now()}`,
+          srcIp: '192.168.1.5',
+          srcPort: Math.floor(Math.random() * 60000) + 1024,
+          dstIp: publicIps[Math.floor(Math.random() * publicIps.length)],
+          dstPort: 443,
+          srcLat: 34.0522, srcLng: 105.2437,
+          dstLat: 30 + Math.random() * 10, dstLng: 110 + Math.random() * 10,
+          protocol: 'TCP',
+          status: 'active',
+          bytes: Math.floor(Math.random() * 2000),
+          packets: Math.floor(Math.random() * 20),
+          timestamp: new Date().toISOString(),
           process: processes[Math.floor(Math.random() * processes.length)]
         };
+        flows = [newFlow, ...flows.slice(0, 19)];
       }
     }
     return flows;
