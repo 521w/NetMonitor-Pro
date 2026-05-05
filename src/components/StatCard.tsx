@@ -17,11 +17,11 @@ export const StatCard = ({ title, value, unit, icon: Icon, colorClass, trend }: 
       <div className={cn("p-2 rounded-lg bg-opacity-10", colorClass.replace('text-', 'bg-'))}>
         <Icon size={24} className={colorClass} />
       </div>
-      {trend && (
+      {trend != null && (
         <div className="flex items-center gap-1 text-xs">
-          {trend > 0 ? <ArrowUpRight size={14} className="text-emerald-400" /> : <ArrowDownRight size={14} className="text-rose-400" />}
-          <span className={trend > 0 ? "text-emerald-400" : "text-rose-400"}>
-            较上分钟 {trend > 0 ? '上升' : '下降'} {Math.abs(trend)}%
+          {trend >= 0 ? <ArrowUpRight size={14} className="text-emerald-400" /> : <ArrowDownRight size={14} className="text-rose-400" />}
+          <span className={trend >= 0 ? "text-emerald-400" : "text-rose-400"}>
+            较上分钟 {trend >= 0 ? '上升' : '下降'} {Math.abs(trend)}%
           </span>
         </div>
       )}

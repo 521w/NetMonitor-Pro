@@ -60,7 +60,8 @@ const serverState = {
     bps: 1200000,
     pps: 450,
     activeConnections: 1200,
-    cpuUsage: 2.5
+    cpuUsage: 2.5,
+    memoryUsage: 450.0
   },
   flows: [] as any[]
 };
@@ -80,8 +81,8 @@ const getMockFlows = () => {
       dstPort: Math.floor(Math.random() * 1024),
       srcLat: 34.0522 + (Math.random() - 0.5) * 5, // China regions approximate
       srcLng: 105.2437 + (Math.random() - 0.5) * 10,
-      dstLat: 20 + Math.random() * 40,
-      dstLng: 70 + Math.random() * 60,
+      dstLat: 22 + Math.random() * 18,   // 22°~40° (South to North China)
+      dstLng: 100 + Math.random() * 25,  // 100°~125° (West to East China)
       protocol: protocols[Math.floor(Math.random() * protocols.length)],
       status: statuses[Math.floor(Math.random() * statuses.length)],
       bytes: Math.floor(Math.random() * 50000),
@@ -134,6 +135,7 @@ app.get('/api/stats', (req, res) => {
   serverState.stats.pps = Math.max(50, serverState.stats.pps + (Math.random() - 0.5) * 100);
   serverState.stats.activeConnections = Math.max(10, serverState.stats.activeConnections + Math.floor((Math.random() - 0.5) * 50));
   serverState.stats.cpuUsage = Math.min(100, Math.max(0.5, serverState.stats.cpuUsage + (Math.random() - 0.5) * 1.5));
+  serverState.stats.memoryUsage = Math.max(200, serverState.stats.memoryUsage + (Math.random() - 0.5) * 10);
 
   res.json({
     uptime: process.uptime(),
@@ -141,7 +143,7 @@ app.get('/api/stats', (req, res) => {
     pps: Math.floor(serverState.stats.pps),
     activeConnections: serverState.stats.activeConnections,
     cpuUsage: serverState.stats.cpuUsage.toFixed(2),
-    memoryUsage: (Math.random() * 200 + 400).toFixed(2)
+    memoryUsage: serverState.stats.memoryUsage.toFixed(2)
   });
 });
 

@@ -21,6 +21,8 @@ export interface NetworkStats {
   pps: number;
   activeConnections: number;
   cpuUsage: string;
+  uptime: number;
+  memoryUsage: string;
 }
 
 export interface AIAnalysis {

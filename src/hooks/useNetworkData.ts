@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import { Flow, NetworkStats, HistoryPoint } from '../types';
+import { calculateTrend } from '../lib/networkUtils';
 
 export function useNetworkData(interval: number = 5000) {
   const [flows, setFlows] = useState<Flow[]>([]);
@@ -23,9 +24,6 @@ export function useNetworkData(interval: number = 5000) {
         setError(null);
 
         if (prevStats.current) {
-          const calculateTrend = (curr: number, prev: number) => 
-            prev === 0 ? 0 : parseFloat(((curr - prev) / prev * 100).toFixed(1));
-          
           setTrends({
             bps: calculateTrend(newStats.bps, prevStats.current.bps),
             pps: calculateTrend(newStats.pps, prevStats.current.pps),
