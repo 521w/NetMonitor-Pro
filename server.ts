@@ -1,5 +1,4 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -48,9 +47,9 @@ const localAnalyze = (data: any[]) => {
   };
 };
 
-async function startServer() {
+export async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
   // Middleware
   app.use(express.json());
@@ -103,6 +102,7 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -121,4 +121,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.argv[1] === fileURLToPath(import.meta.url) || process.env.NODE_ENV === 'development') {
+  startServer();
+}
