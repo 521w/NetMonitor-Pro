@@ -1,0 +1,12 @@
+{
+  "name": "NetMonitor Pro Dashboard",
+  "description": "A high-performance network monitoring dashboard featuring real-time eBPF packet analysis, traffic visualization, and security alerting.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "realtime_monitoring",
+    "network_analysis"
+  ]
+}
