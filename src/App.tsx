@@ -37,9 +37,17 @@ import { SecurityShield } from './components/SecurityShield';
 import { useNetworkData } from './hooks/useNetworkData';
 import { api } from './services/api';
 
+import { fetchPublicIP, IPInfo } from './services/ipService';
+
 export default function App() {
   const { flows, stats, history, error, trends, setFlows } = useNetworkData(5000); // 5s interval
   const [search, setSearch] = useState('');
+  const [ipInfo, setIpInfo] = useState<IPInfo | null>(null);
+
+  useEffect(() => {
+    fetchPublicIP().then(setIpInfo);
+  }, []);
+
   const [selectedTab, setSelectedTab] = useState<'bps' | 'pps'>('bps');
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -134,7 +142,12 @@ export default function App() {
               </div>
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">本地真实 IP (ISP)</p>
-                <p className="text-sm font-mono font-bold text-white">123.116.88.241 <span className="text-[10px] text-slate-500 font-normal">(北京 联通)</span></p>
+                <p className="text-sm font-mono font-bold text-white">
+                  {ipInfo?.ip || '检测中...'} 
+                  <span className="text-[10px] text-slate-500 font-normal ml-2">
+                    ({ipInfo?.city || ''} {ipInfo?.org || ''})
+                  </span>
+                </p>
               </div>
             </div>
             <div className="text-right">
@@ -149,7 +162,12 @@ export default function App() {
               </div>
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">当前出口 IP (Exit)</p>
-                <p className="text-sm font-mono font-bold text-indigo-400">27.189.124.62 <span className="text-[10px] text-slate-500 font-normal">(东京 AWS)</span></p>
+                <p className="text-sm font-mono font-bold text-indigo-400">
+                  {ipInfo?.ip || '检测中...'} 
+                  <span className="text-[10px] text-slate-500 font-normal ml-2">
+                    ({ipInfo?.city || ''} {ipInfo?.country || ''})
+                  </span>
+                </p>
               </div>
             </div>
             <div className="text-right">

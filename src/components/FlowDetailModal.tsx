@@ -86,9 +86,9 @@ export const FlowDetailModal = ({ flow, onClose, onKill }: FlowDetailModalProps)
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     "text-[9px] px-1 rounded font-bold uppercase",
-                    flow.srcIp === '123.116.88.241' ? "text-rose-400 bg-rose-400/10" : "text-emerald-400 bg-emerald-400/10"
+                    flow.interface === 'wlan0' ? "text-rose-400 bg-rose-400/10" : "text-emerald-400 bg-emerald-400/10"
                   )}>
-                    {flow.srcIp === '123.116.88.241' ? 'REAL_IP_EXPOSED' : 'PROXY_HIDDEN'}
+                    {flow.interface === 'wlan0' ? 'REAL_IP_EXPOSED' : 'PROXY_HIDDEN'}
                   </span>
                   <span className="text-[10px] text-slate-500 font-mono">Port: {flow.srcPort}</span>
                 </div>
