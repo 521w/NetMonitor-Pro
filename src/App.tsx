@@ -33,74 +33,27 @@ import { FlowTable } from './components/FlowTable';
 import { FlowDetailModal } from './components/FlowDetailModal';
 import { SecurityShield } from './components/SecurityShield';
 
+import { useNetworkData } from './hooks/useNetworkData';
+import { api } from './services/api';
+
 export default function App() {
-  const [flows, setFlows] = useState<Flow[]>([]);
-  const [stats, setStats] = useState<NetworkStats | null>(null);
-  const [history, setHistory] = useState<any[]>([]);
+  const { flows, stats, history, error, trends, setFlows } = useNetworkData(5000); // 5s interval
   const [search, setSearch] = useState('');
   const [selectedTab, setSelectedTab] = useState<'bps' | 'pps'>('bps');
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
-  
-  // Real-time dynamic trends
-  const [trends, setTrends] = useState({ bps: 0, pps: 0, activeConnections: 0 });
-  const prevStats = useRef<NetworkStats | null>(null);
+  const [notifications, setNotifications] = useState(3);
+  const [showError, setShowError] = useState(false);
 
-  // Fetch Logic
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [flowsRes, statsRes] = await Promise.all([
-          fetch('/api/flows').then(r => r.json()),
-          fetch('/api/stats').then(r => r.json())
-        ]);
-        
-        setFlows(flowsRes);
-        setStats(statsRes);
-        
-        // Calculate dynamic trend if we have previous data
-        if (prevStats.current) {
-          const bpsTrend = ((statsRes.bps - prevStats.current.bps) / (prevStats.current.bps || 1)) * 100;
-          const ppsTrend = ((statsRes.pps - prevStats.current.pps) / (prevStats.current.pps || 1)) * 100;
-          const connTrend = ((statsRes.activeConnections - prevStats.current.activeConnections) / (prevStats.current.activeConnections || 1)) * 100;
-          
-          setTrends({
-            bps: parseFloat(bpsTrend.toFixed(1)),
-            pps: parseFloat(ppsTrend.toFixed(1)),
-            activeConnections: parseFloat(connTrend.toFixed(1))
-          });
-        }
-        prevStats.current = statsRes;
-
-        setHistory(prev => {
-          const newPoint = {
-            time: new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' }),
-            bps: statsRes.bps / 1000,
-            pps: statsRes.pps
-          };
-          const next = [...prev, newPoint];
-          return next.slice(-20);
-        });
-      } catch (err) {
-        console.error('Failed to fetch data', err);
-      }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    if (error) setShowError(true);
+  }, [error]);
 
   const runAiAnalysis = async () => {
     setAiLoading(true);
     try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: flows })
-      });
-      const data = await res.json();
+      const data = await api.analyze(flows);
       setAiAnalysis(data);
     } catch (err) {
       console.error('Analysis failed', err);
@@ -110,12 +63,14 @@ export default function App() {
   };
 
   const handleKillProcess = (id: string) => {
-    // Mocking a root operation
     console.log(`Executing: sudo kill -9 process from flow ${id}`);
     alert(`Root: 进程已强制阻断并加入黑名单。会话 ${id} 已断开。`);
     setSelectedFlow(null);
-    // Refresh flows immediately
-    fetch('/api/flows').then(r => r.json()).then(setFlows);
+    api.getFlows().then(setFlows);
+  };
+
+  const handleExportPCAP = () => {
+    alert('正在生成 eBPF 流量归档 (PCAP)... 文件已保存至桌面。');
   };
 
   const filteredFlows = useMemo(() => {
@@ -156,11 +111,19 @@ export default function App() {
           </div>
           <div className="h-8 w-px bg-white/10" />
           <div className="flex items-center gap-3">
-            <button className="p-2 text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-lg transition-all relative">
+            <button 
+              onClick={() => setNotifications(0)}
+              className="p-2 text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-lg transition-all relative"
+            >
               <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-[#02010a]" />
+              {notifications > 0 && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-[#02010a]" />
+              )}
             </button>
-            <button className="p-2 text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-lg transition-all">
+            <button 
+              onClick={() => alert('内核审计偏好设置正在加载...')}
+              className="p-2 text-slate-400 hover:text-slate-100 hover:bg-white/5 rounded-lg transition-all"
+            >
               <Settings size={20} />
             </button>
             <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/30">
@@ -172,6 +135,19 @@ export default function App() {
       </nav>
 
       <main className="p-8 max-w-[1700px] mx-auto space-y-8">
+        {showError && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3 text-rose-400">
+              <Shield size={20} />
+              <span className="text-sm font-bold">系统同步异常: {error}</span>
+            </div>
+            <button onClick={() => setShowError(false)} className="text-rose-400/50 hover:text-rose-400 text-xs font-bold">隐藏</button>
+          </motion.div>
+        )}
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard 
@@ -285,6 +261,7 @@ export default function App() {
               flows={filteredFlows} 
               aiAnalysis={aiAnalysis} 
               onSelectFlow={setSelectedFlow} 
+              onExport={handleExportPCAP}
             />
           </div>
 

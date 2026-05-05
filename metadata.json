@@ -1,9 +1,7 @@
 {
   "name": "NetMonitor PRO - 本地监控版",
   "description": "高性能网络监控仪表盘，支持实时 eBPF 数据包分析、流量可视化及本地自学习安全审计。完全本地化运行，无需外部 API。",
-  "requestFramePermissions": [
-    "geolocation"
-  ],
+  "requestFramePermissions": [],
   "majorCapabilities": [
     "realtime_monitoring",
     "network_analysis",

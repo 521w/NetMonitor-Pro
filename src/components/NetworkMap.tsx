@@ -21,8 +21,8 @@ export const NetworkMap = ({ flows, suspiciousIps }: { flows: Flow[], suspicious
   return (
     <div className="h-full w-full rounded-xl overflow-hidden grayscale brightness-75 contrast-125">
       <MapContainer 
-        center={[20, 0]} 
-        zoom={2} 
+        center={[34, 105]} 
+        zoom={4} 
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
       >

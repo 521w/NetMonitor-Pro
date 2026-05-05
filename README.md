@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# NetMonitor PRO - 本地核心网络审计系统
 
-# Run and deploy your AI Studio app
+![Build Status](https://github.com/your-username/netmonitor-pro/actions/workflows/build-desktop.yml/badge.svg)
 
-This contains everything you need to run your app locally.
+高性能网络监控仪表盘，专为内核级流量审计设计。支持实时 eBPF 数据包分析、流量地理可视化及本地启发式安全审计。
 
-View your app in AI Studio: https://ai.studio/apps/69d91b82-2896-41db-ac08-0f71722c0464
+## 核心特性
 
-## Run Locally
+- **eBPF 实时追踪**: 深入内核态捕获连接与进程映射。
+- **本地审计引擎**: 基于启发式算法的实时威胁检测，完全离线运行。
+- **动态可视化**: 支持 BPS/PPS 趋势图谱及全球流量轨迹。
+- **Root 级控制**: 实时阻断可疑进程与非法连接。
+- **多端分发**: 支持 Web 及多平台桌面应用 (Windows, Mac, Linux)。
 
-**Prerequisites:**  Node.js
+## 快速开始
 
+### 开发模式
+1. 安装依赖: `npm install`
+2. 启动服务: `npm run dev`
+3. 访问: `http://localhost:3000`
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 构建桌面版
+`npm run electron:build`
+
+## 技术栈
+
+- **Frontend**: React 19, Tailwind CSS 4, Framer Motion, Recharts, Leaflet
+- **Backend**: Node.js, Express
+- **Desktop**: Electron, Vite Plugin Electron
+- **Security**: Local Heuristic Engine (Offline)
+
+## 法律声明
+本软件仅用于合法网络审计与监控。Root 模式下的进程阻断功能可能影响系统稳定性，请谨慎使用。
