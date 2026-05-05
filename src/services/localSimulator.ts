@@ -1,11 +1,11 @@
 
 import { Flow, NetworkStats, AIAnalysis } from '../types';
-import { fetchPublicIP } from './ipService';
+import { fetchPublicIP, MOCK_REAL_ISP_IP } from './ipService';
 
-let detectedIP = '123.116.88.241';
+let detectedExitIP = '27.189.124.62';
 fetchPublicIP().then(info => {
-  detectedIP = info.ip;
-  console.log('Simulator synchronized with real IP:', detectedIP);
+  detectedExitIP = info.ip;
+  console.log('Simulator synchronized with external Exit IP:', detectedExitIP);
 });
 
 let flows: Flow[] = [];
@@ -43,7 +43,7 @@ export const localSimulator = {
         
         return {
           id: `socket-${i}-${Date.now()}`,
-          srcIp: isLeak ? detectedIP : '10.0.0.1', // 泄露时显示真实公网 IP，否则显示隧道内网 IP
+          srcIp: isLeak ? MOCK_REAL_ISP_IP : (isExternal ? '10.0.0.1' : '127.0.0.1'), 
           srcPort: Math.floor(Math.random() * 60000) + 1024,
           dstIp: targetIp,
           dstPort: isExternal ? [80, 443, 8080, 53][Math.floor(Math.random() * 4)] : Math.floor(Math.random() * 1024),
@@ -67,11 +67,12 @@ export const localSimulator = {
         timestamp: new Date().toISOString()
       }));
 
+      // 实时模拟泄露发生
       if (Math.random() > 0.8) {
         const leakIp = '1.1.1.1';
         const newFlow: Flow = {
           id: `leak-${Date.now()}`,
-          srcIp: detectedIP, // 真实 IP
+          srcIp: MOCK_REAL_ISP_IP, // 泄露时显示真实公网 IP
           srcPort: 54321,
           dstIp: leakIp,
           dstPort: 53,

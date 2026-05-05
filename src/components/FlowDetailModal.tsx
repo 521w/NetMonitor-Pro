@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Flow } from '../types';
 import { StatusDot } from './StatusDot';
 import { cn } from '../lib/utils';
+import { MOCK_REAL_ISP_IP } from '../services/ipService';
 
 interface FlowDetailModalProps {
   flow: Flow;
@@ -86,9 +87,9 @@ export const FlowDetailModal = ({ flow, onClose, onKill }: FlowDetailModalProps)
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     "text-[9px] px-1 rounded font-bold uppercase",
-                    flow.interface === 'wlan0' ? "text-rose-400 bg-rose-400/10" : "text-emerald-400 bg-emerald-400/10"
+                    flow.srcIp === MOCK_REAL_ISP_IP ? "text-rose-400 bg-rose-400/10" : "text-emerald-400 bg-emerald-400/10"
                   )}>
-                    {flow.interface === 'wlan0' ? 'REAL_IP_EXPOSED' : 'PROXY_HIDDEN'}
+                    {flow.srcIp === MOCK_REAL_ISP_IP ? 'REAL_IP_EXPOSED' : 'PROXY_HIDDEN'}
                   </span>
                   <span className="text-[10px] text-slate-500 font-mono">Port: {flow.srcPort}</span>
                 </div>

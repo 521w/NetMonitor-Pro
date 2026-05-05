@@ -37,15 +37,15 @@ import { SecurityShield } from './components/SecurityShield';
 import { useNetworkData } from './hooks/useNetworkData';
 import { api } from './services/api';
 
-import { fetchPublicIP, IPInfo } from './services/ipService';
+import { fetchPublicIP, IPInfo, MOCK_REAL_ISP_IP, MOCK_REAL_ISP_LOC } from './services/ipService';
 
 export default function App() {
   const { flows, stats, history, error, trends, setFlows } = useNetworkData(5000); // 5s interval
   const [search, setSearch] = useState('');
-  const [ipInfo, setIpInfo] = useState<IPInfo | null>(null);
+  const [exitIpInfo, setExitIpInfo] = useState<IPInfo | null>(null);
 
   useEffect(() => {
-    fetchPublicIP().then(setIpInfo);
+    fetchPublicIP().then(setExitIpInfo);
   }, []);
 
   const [selectedTab, setSelectedTab] = useState<'bps' | 'pps'>('bps');
@@ -143,9 +143,9 @@ export default function App() {
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">本地真实 IP (ISP)</p>
                 <p className="text-sm font-mono font-bold text-white">
-                  {ipInfo?.ip || '检测中...'} 
+                  {MOCK_REAL_ISP_IP} 
                   <span className="text-[10px] text-slate-500 font-normal ml-2">
-                    ({ipInfo?.city || ''} {ipInfo?.org || ''})
+                    ({MOCK_REAL_ISP_LOC})
                   </span>
                 </p>
               </div>
@@ -163,9 +163,9 @@ export default function App() {
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-bold">当前出口 IP (Exit)</p>
                 <p className="text-sm font-mono font-bold text-indigo-400">
-                  {ipInfo?.ip || '检测中...'} 
+                  {exitIpInfo?.ip || '检测中...'} 
                   <span className="text-[10px] text-slate-500 font-normal ml-2">
-                    ({ipInfo?.city || ''} {ipInfo?.country || ''})
+                    ({exitIpInfo?.city || ''} {exitIpInfo?.country || ''})
                   </span>
                 </p>
               </div>
