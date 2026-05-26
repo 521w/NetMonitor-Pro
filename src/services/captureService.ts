@@ -127,11 +127,10 @@ function parseProcNetDev(raw: string): Record<string, { rxBytes: number; txBytes
 
 /**
  * PassiveDataSource - 无 root 数据源
- * 读取 /proc/net/xt_qtaguid/iface_stat_all（Android 应用级统计）
+ * 读取 /proc/net/dev 获取接口统计（无需 root 权限）
  */
 class PassiveDataSource {
   async fetch(): Promise<{ flows: Partial<Flow>[]; devStats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> }> {
-    // 尝试读取应用级流量统计（无需 root）
     const devResult = await RootExecutor.exec('cat /proc/net/dev');
     let devStats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> = {};
 
@@ -139,19 +138,30 @@ class PassiveDataSource {
       devStats = parseProcNetDev(devResult.output);
     }
 
-    // 无 root 时尝试 TCP/UDP 表（可能需要 root，失败则返回空）
-    const tcpResult = await RootExecutor.exec('cat /proc/net/tcp');
-    const udpResult = await RootExecutor.exec('cat /proc/net/udp');
+    // Passive mode: only use /proc/net/dev (no root required)
+    // /proc/net/tcp and /proc/net/udp need root on modern Android
+    return { flows: [], devStats };
+  }
+}
+
+/**
+ * ActiveDataSource - root 数据源
+ * 在有 root 时读取完整的 /proc/net 数据
+ */
+class ActiveDataSource {
+  async fetch(): Promise<{ flows: Partial<Flow>[]; devStats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> }> {
+    const passive = new PassiveDataSource();
+    const { devStats } = await passive.fetch();
 
     const flows: Partial<Flow>[] = [];
 
+    const tcpResult = await RootExecutor.exec('cat /proc/net/tcp');
     if (tcpResult.success) {
       const tcpSockets = parseProcNetSockets(tcpResult.output, 'TCP');
       for (const sock of tcpSockets) {
         const [srcIp, srcPort] = sock.localAddress.split(':');
         const [dstIp, dstPort] = sock.remoteAddress.split(':');
 
-        // 过滤掉 LISTEN 状态的本地端口（0.0.0.0:0）
         if (sock.state === 'LISTEN' || dstPort === '0000') continue;
 
         flows.push({
@@ -161,7 +171,7 @@ class PassiveDataSource {
           dstPort: parseInt(dstPort) || 0,
           protocol: 'TCP',
           status: sock.state === 'ESTABLISHED' ? 'active' : 'closed',
-          bytes: 0, // /proc/net/tcp 不提供字节数
+          bytes: 0, // /proc/net/tcp does not contain per-flow byte counts
           packets: 1,
           process: `uid_${sock.uid}`,
           interface: 'wlan0',
@@ -169,6 +179,7 @@ class PassiveDataSource {
       }
     }
 
+    const udpResult = await RootExecutor.exec('cat /proc/net/udp');
     if (udpResult.success) {
       const udpSockets = parseProcNetSockets(udpResult.output, 'UDP');
       for (const sock of udpSockets) {
@@ -184,7 +195,7 @@ class PassiveDataSource {
           dstPort: parseInt(dstPort) || 0,
           protocol: 'UDP',
           status: 'active',
-          bytes: 0,
+          bytes: 0, // /proc/net/udp does not contain per-flow byte counts
           packets: 1,
           process: `uid_${sock.uid}`,
           interface: 'wlan0',
@@ -193,17 +204,6 @@ class PassiveDataSource {
     }
 
     return { flows, devStats };
-  }
-}
-
-/**
- * ActiveDataSource - root 数据源
- * 可在 PassiveDataSource 基础上增加 eBPF/pcap 实时数据（预留）
- */
-class ActiveDataSource {
-  async fetch(): Promise<{ flows: Partial<Flow>[]; devStats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> }> {
-    const base = new PassiveDataSource();
-    return base.fetch();
   }
 }
 
@@ -365,7 +365,19 @@ export class CaptureService {
       this.prevStats = { ...this.stats };
       this.stats = devStats;
 
-      // 构建 Flow 列表
+      // 计算本轮总流量变化用于分配到各 flow
+      const currentTotalBytes = Object.entries(devStats)
+        .filter(([iface]) => iface !== 'lo')
+        .reduce((sum, [, s]) => sum + s.rxBytes + s.txBytes, 0);
+      const prevTotalBytes = Object.entries(this.prevStats)
+        .filter(([iface]) => iface !== 'lo')
+        .reduce((sum, [, s]) => sum + s.rxBytes + s.txBytes, 0);
+      const deltaBytes = currentTotalBytes - prevTotalBytes;
+
+      // 每 flow 均分本轮流量变化
+      const bytesPerFlow = rawFlows.length > 0 ? Math.floor(deltaBytes / rawFlows.length) : 0;
+
+      // 构建 Flow 列表（GPS 坐标设为 0，需要 GeoIP 服务补充）
       const enrichedFlows: Flow[] = rawFlows.map((raw) => ({
         id: `${this.state.sourceType}-${++this.flowIdCounter}`,
         srcIp: raw.srcIp || '0.0.0.0',
@@ -374,14 +386,14 @@ export class CaptureService {
         dstPort: raw.dstPort || 0,
         protocol: raw.protocol || 'TCP',
         status: raw.status || 'active',
-        bytes: raw.bytes || 0,
+        bytes: raw.bytes || bytesPerFlow,
         packets: raw.packets || 0,
         process: raw.process || 'unknown',
         interface: raw.interface || this.state.activeInterface || 'unknown',
-        srcLat: 39.9,
-        srcLng: 116.4,
-        dstLat: 39.9,
-        dstLng: 116.4,
+        srcLat: 0,
+        srcLng: 0,
+        dstLat: 0,
+        dstLng: 0,
         timestamp: new Date().toISOString(),
         metadata: {
           source: this.state.sourceType,

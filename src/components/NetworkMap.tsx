@@ -84,24 +84,27 @@ export const NetworkMap = ({ flows, suspiciousIps }: NetworkMapProps) => {
               </motion.g>
 
               {/* Activity Particles */}
-              {portFlows.slice(0, 3).map((_, pIdx) => (
-                <motion.circle
-                  key={pIdx}
-                  r="1.5"
-                  className={hasSuspicious ? "fill-rose-500" : "fill-indigo-400"}
-                  initial={{ offsetDistance: "0%" }}
-                  animate={{ offsetDistance: "100%" }}
-                  transition={{ 
-                    duration: 1.5 + Math.random(), 
-                    repeat: Infinity, 
-                    delay: pIdx * 0.4,
-                    ease: "linear"
-                  }}
-                  style={{ 
-                    motionPath: `path('M 200 200 L ${x} ${y}')`,
-                  }}
-                />
-              ))}
+              {portFlows.slice(0, 3).map((_, pIdx) => {
+                const startX = 200;
+                const startY = 200;
+                const endX = x;
+                const endY = y;
+                return (
+                  <motion.circle
+                    key={pIdx}
+                    r="1.5"
+                    className={hasSuspicious ? "fill-rose-500" : "fill-indigo-400"}
+                    initial={{ cx: startX, cy: startY }}
+                    animate={{ cx: [startX, endX], cy: [startY, endY] }}
+                    transition={{ 
+                      duration: 1.5 + pIdx * 0.3, 
+                      repeat: Infinity, 
+                      delay: pIdx * 0.4,
+                      ease: "linear"
+                    }}
+                  />
+                );
+              })}
             </g>
           );
         })}

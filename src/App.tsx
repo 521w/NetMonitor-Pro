@@ -55,7 +55,20 @@ export default function App() {
   const [mobileView, setMobileView] = useState<'monitor' | 'table'>('monitor');
 
   const handleExportPCAP = () => {
-    alert('正在生成内核流量审计归档 (PCAP)...');
+    // Export current flows as JSON (real PCAP would require tcpdump with root)
+    const data = JSON.stringify({ 
+      exportedAt: new Date().toISOString(), 
+      sourceType: serviceState.sourceType,
+      activeInterface: serviceState.activeInterface,
+      flows 
+    }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `netmonitor-export-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const filteredFlows = useMemo(() => {
@@ -188,7 +201,7 @@ export default function App() {
               ) : (
                 <button 
                   onClick={() => CaptureService.startCapture()}
-                  disabled={serviceState.deviceStatus !== 'ROOT_READY'}
+                  disabled={serviceState.deviceStatus !== 'ROOT_READY' && serviceState.sourceType !== 'passive'}
                   className="flex-1 md:flex-none px-10 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-xs font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
                 >
                   <Play size={14} /> 启动内核实时扫描

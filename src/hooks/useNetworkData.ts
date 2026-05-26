@@ -10,6 +10,10 @@ export function useNetworkData() {
   const prevStats = useRef<NetworkStats | null>(null);
   const [trends, setTrends] = useState({ bps: 0, pps: 0, activeConnections: 0 });
   const [serviceState, setServiceState] = useState<KernelServiceState>(CaptureService.getState());
+
+  // Track when monitoring started for uptime calculation
+  const startTimeRef = useRef<number>(Date.now());
+
   const uiState = useMemo<UIState>(() => {
     const leaking = flows.filter((f) => f.status === 'leaking');
     return {
@@ -22,6 +26,9 @@ export function useNetworkData() {
   }, [flows, serviceState]);
 
   useEffect(() => {
+    // Reset uptime on mount
+    startTimeRef.current = Date.now();
+
     CaptureService.addStateListener(setServiceState);
 
     CaptureService.addFlowListener((allFlows) => {
@@ -33,21 +40,24 @@ export function useNetworkData() {
       // Use CaptureService.computeStats() for real-rate calculations
       const devStats = CaptureService.computeStats();
 
+      // Calculate uptime as seconds since monitoring started
+      const uptimeSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
+
       const newStats: NetworkStats = {
         activeConnections: activeCount,
-        totalPackets: activeCount,
+        totalPackets: allFlows.reduce((acc, f) => acc + (f.packets || 0), 0),
         totalBytes: currentBytes,
         bps: devStats.deltaRxBps + devStats.deltaTxBps,
         pps: devStats.deltaRxPps + devStats.deltaTxPps,
         cpuUsage: '--',
-        uptime: Date.now(),
+        uptime: uptimeSeconds,
         memoryUsage: '--',
         metadata: allFlows[0]?.metadata || { source: 'passive', timestamp: new Date().toISOString(), reliability: 0.5 },
       };
 
       setStats(newStats);
 
-      if (prevStats.current) {
+      if (prevStats.current && prevStats.current.bps > 0) {
         setTrends({
           bps: calculateTrend(newStats.bps, prevStats.current.bps),
           pps: calculateTrend(newStats.pps, prevStats.current.pps),

@@ -10,7 +10,6 @@ interface FlowDetailModalProps {
 }
 
 export const FlowDetailModal = ({ flow, onClose, onKill }: FlowDetailModalProps) => {
-  /* eslint-disable @typescript-eslint/no-unused-vars */
   const isLeak = flow.interface !== 'tun0' && flow.interface !== 'lo' && !flow.dstIp.startsWith('192.168.');
   const isLocal = flow.interface === 'lo' || flow.dstIp.startsWith('192.168.');
 

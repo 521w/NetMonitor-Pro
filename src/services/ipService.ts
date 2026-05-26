@@ -35,7 +35,7 @@ export const fetchPublicIP = async (): Promise<IPInfo> => {
         city: '',
         region: '',
         country: data.country || '',
-        org: data.user_agent || '',
+        org: '',
       };
     } catch {
       // last resort: raw IP
