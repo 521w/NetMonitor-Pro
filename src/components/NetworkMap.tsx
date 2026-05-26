@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Flow } from '../types';
 import { cn } from '../lib/utils';

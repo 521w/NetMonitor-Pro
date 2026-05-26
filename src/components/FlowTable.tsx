@@ -1,4 +1,3 @@
-import React from 'react';
 import { Database, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Flow, AIAnalysis } from '../types';
@@ -55,9 +54,7 @@ export const FlowTable = ({ flows, aiAnalysis, onSelectFlow, onExport }: FlowTab
                   </td>
                 </tr>
               ) : flows.map((flow) => {
-                const isSrcSuspicious = aiAnalysis?.suspicious_ips?.includes(flow.srcIp);
                 const isDstSuspicious = aiAnalysis?.suspicious_ips?.includes(flow.dstIp);
-                const isLocal = flow.dstIp.startsWith('192.168.') || flow.dstIp === '127.0.0.1';
 
                 return (
                   <motion.tr 

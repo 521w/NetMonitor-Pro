@@ -1,25 +1,21 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  Activity, 
-  Shield, 
-  Search, 
-  Bell, 
-  Settings,
+import { useState, useEffect, useMemo } from 'react';
+import {
+  Activity,
+  Shield,
+  Search,
   Wifi,
   Zap,
   Globe,
   Cpu,
   Terminal,
-  Brain,
   Play,
   Square,
-  AlertTriangle
 } from 'lucide-react';
-import { 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   AreaChart,
   Area
@@ -27,10 +23,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 
-// Centralized Types
-import { Flow, NetworkStats, AIAnalysis } from './types';
+import { Flow, AIAnalysis } from './types';
 
-// Split Components
 import { StatCard } from './components/StatCard';
 import { NetworkMap } from './components/NetworkMap';
 import { LocalInsightPanel } from './components/LocalInsightPanel';
@@ -39,17 +33,14 @@ import { FlowDetailModal } from './components/FlowDetailModal';
 import { SecurityShield } from './components/SecurityShield';
 
 import { useNetworkData } from './hooks/useNetworkData';
-import { RootExecutor } from './services/rootExecutor';
 import { CaptureService } from './services/captureService';
 
 import { fetchPublicIP, IPInfo } from './services/ipService';
 
 export default function App() {
-  const { flows, stats, history, error, trends, serviceState, uiState, setFlows } = useNetworkData(); 
+  const { flows, stats, history, trends, serviceState, uiState } = useNetworkData();
   const [search, setSearch] = useState('');
   const [exitIpInfo, setExitIpInfo] = useState<IPInfo | null>(null);
-
-  const [ipInfo, setIpInfo] = useState<IPInfo | null>(null);
 
   useEffect(() => {
     fetchPublicIP().then(setExitIpInfo);
@@ -63,18 +54,14 @@ export default function App() {
   const [showError, setShowError] = useState(false);
   const [mobileView, setMobileView] = useState<'monitor' | 'table'>('monitor');
 
-  useEffect(() => {
-    if (error) setShowError(true);
-  }, [error]);
-
   const handleExportPCAP = () => {
     alert('正在生成内核流量审计归档 (PCAP)...');
   };
 
   const filteredFlows = useMemo(() => {
-    return flows.filter(f => 
-      f.srcIp.includes(search) || 
-      f.dstIp.includes(search) || 
+    return flows.filter((f: Flow) =>
+      f.srcIp.includes(search) ||
+      f.dstIp.includes(search) ||
       f.process.toLowerCase().includes(search.toLowerCase()) ||
       f.interface.toLowerCase().includes(search.toLowerCase())
     );
@@ -84,8 +71,8 @@ export default function App() {
     setAiLoading(true);
     try {
       // 收集当前流量数据用于分析
-      const leakingFlows = flows.filter((f) => f.interface !== 'tun0' && f.interface !== 'lo');
-      const uniqueIPs = [...new Set(leakingFlows.map((f) => f.dstIp))];
+      const leakingFlows = flows.filter((f: Flow) => f.interface !== 'tun0' && f.interface !== 'lo');
+      const uniqueIPs: string[] = Array.from(new Set(leakingFlows.map((f: Flow) => f.dstIp)));
 
       const analysis: AIAnalysis = {
         privacy_score: leakingFlows.length > 0 ? Math.max(0, 100 - leakingFlows.length * 5) : 98,
@@ -107,7 +94,7 @@ export default function App() {
   };
 
   const handleKillProcess = async (flowId: string) => {
-    const flow = flows.find((f) => f.id === flowId);
+    const flow = flows.find((f: Flow) => f.id === flowId);
     if (!flow) return;
 
     // 在当前实现中，我们无法直接跨进程杀进程。
@@ -288,7 +275,7 @@ export default function App() {
           </div>
         </div>
 
-        {showError && (
+        {showError && serviceState.lastError && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -296,9 +283,9 @@ export default function App() {
           >
             <div className="flex items-center gap-3 text-rose-400">
               <Shield size={20} />
-              <span className="text-sm font-bold">系统同步异常: {error}</span>
+              <span className="text-sm font-bold">System Error: {serviceState.lastError}</span>
             </div>
-            <button onClick={() => setShowError(false)} className="text-rose-400/50 hover:text-rose-400 text-xs font-bold">隐藏</button>
+            <button onClick={() => setShowError(false)} className="text-rose-400/50 hover:text-rose-400 text-xs font-bold">Dismiss</button>
           </motion.div>
         )}
         {/* Stats Grid */}

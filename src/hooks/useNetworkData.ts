@@ -7,11 +7,9 @@ export function useNetworkData() {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [stats, setStats] = useState<NetworkStats | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const prevStats = useRef<NetworkStats | null>(null);
   const [trends, setTrends] = useState({ bps: 0, pps: 0, activeConnections: 0 });
   const [serviceState, setServiceState] = useState<KernelServiceState>(CaptureService.getState());
-
   const uiState = useMemo<UIState>(() => {
     const leaking = flows.filter((f) => f.status === 'leaking');
     return {
@@ -31,8 +29,6 @@ export function useNetworkData() {
 
       const activeCount = allFlows.length;
       const currentBytes = allFlows.reduce((acc, f) => acc + f.bytes, 0);
-      const currentBps = currentBytes * 8;
-      const currentPps = allFlows.reduce((acc, f) => acc + f.packets, 0);
 
       // Use CaptureService.computeStats() for real-rate calculations
       const devStats = CaptureService.computeStats();
@@ -75,5 +71,5 @@ export function useNetworkData() {
     return () => CaptureService.stopCapture();
   }, []);
 
-  return { flows, stats, history, error, trends, serviceState, uiState, setFlows };
+  return { flows, stats, history, trends, serviceState, uiState };
 }

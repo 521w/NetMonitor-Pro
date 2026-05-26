@@ -1,5 +1,4 @@
-import React from 'react';
-import { RefreshCw, Activity, Zap, Terminal } from 'lucide-react';
+import { RefreshCw, Activity, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AIAnalysis } from '../types';
 import { cn } from '../lib/utils';

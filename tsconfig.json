@@ -15,10 +15,13 @@
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "esModuleInterop": true,
     "paths": {
       "@/*": ["./*"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
 }

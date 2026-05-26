@@ -10,7 +10,7 @@
  * 无 root 时使用 /proc/net/xt_qtaguid/iface_stat_all（应用级流量统计）
  */
 
-import { Flow, KernelServiceState, DataSourceType, SourceMetadata } from '../types';
+import { Flow, KernelServiceState, DataSourceType } from '../types';
 import { RootExecutor } from './rootExecutor';
 
 export type StateListener = (state: KernelServiceState) => void;
@@ -234,7 +234,6 @@ export class CaptureService {
   private static stateListeners: StateListener[] = [];
   private static flowListeners: FlowListener[] = [];
   private static intervalId: number | null = null;
-  private static heartbeatId: number | null = null;
   private static flowIdCounter: number = 0;
 
   // ============================================================
@@ -334,7 +333,7 @@ export class CaptureService {
   }
 
   private static startHeartbeat() {
-    this.heartbeatId = window.setInterval(() => {
+    window.setInterval(() => {
       console.log(
         `[KernelHeartbeat] Status: ${this.state.captureStatus}, Source: ${this.state.sourceType}, ` +
           `Flows: ${this.flows.length}, Interface: ${this.state.activeInterface}`

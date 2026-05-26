@@ -1,10 +1,7 @@
-import React from 'react';
 import { Terminal, Brain, X, Shield, Cpu, Globe, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Flow } from '../types';
-import { StatusDot } from './StatusDot';
 import { cn } from '../lib/utils';
-import { MOCK_REAL_ISP_IP } from '../services/ipService';
 
 interface FlowDetailModalProps {
   flow: Flow;
@@ -13,6 +10,7 @@ interface FlowDetailModalProps {
 }
 
 export const FlowDetailModal = ({ flow, onClose, onKill }: FlowDetailModalProps) => {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   const isLeak = flow.interface !== 'tun0' && flow.interface !== 'lo' && !flow.dstIp.startsWith('192.168.');
   const isLocal = flow.interface === 'lo' || flow.dstIp.startsWith('192.168.');
 
@@ -87,9 +85,9 @@ export const FlowDetailModal = ({ flow, onClose, onKill }: FlowDetailModalProps)
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     "text-[9px] px-1 rounded font-bold uppercase",
-                    flow.srcIp === MOCK_REAL_ISP_IP ? "text-rose-400 bg-rose-400/10" : "text-emerald-400 bg-emerald-400/10"
+                    flow.status === 'leaking' ? "text-rose-400 bg-rose-400/10" : "text-emerald-400 bg-emerald-400/10"
                   )}>
-                    {flow.srcIp === MOCK_REAL_ISP_IP ? 'REAL_IP_EXPOSED' : 'PROXY_HIDDEN'}
+                    {flow.status === 'leaking' ? 'REAL_IP_EXPOSED' : 'PROXY_HIDDEN'}
                   </span>
                   <span className="text-[10px] text-slate-500 font-mono">Port: {flow.srcPort}</span>
                 </div>
