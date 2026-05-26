@@ -79,3 +79,42 @@ export interface HistoryPoint {
   bps: number;
   pps: number;
 }
+
+// ============================================================
+// PCAP Capture Types
+// ============================================================
+
+export interface CapturedPacket {
+  id: number;
+  time: string;          // HH:MM:SS.usec
+  srcIp: string;
+  srcPort: number;
+  dstIp: string;
+  dstPort: number;
+  protocol: 'TCP' | 'UDP' | 'ICMP' | 'OTHER';
+  length: number;        // bytes
+  flags?: string;        // TCP flags: S, S., P., F., R., etc.
+  raw: string;           // original tcpdump line
+}
+
+export interface CaptureSession {
+  id: string;
+  startTime: number;     // Date.now()
+  endTime: number | null;
+  interface: string;
+  filter: string;        // BPF filter expression
+  pcapPath: string;      // /sdcard/netmonitor_xxx.pcap
+  packetCount: number;
+  totalBytes: number;
+  status: 'idle' | 'capturing' | 'stopping';
+}
+
+export interface CaptureStats {
+  duration: number;      // seconds
+  packetCount: number;
+  totalBytes: number;
+  protocolBreakdown: Record<string, number>;
+  topSrcIps: Array<{ ip: string; count: number }>;
+  topDstIps: Array<{ ip: string; count: number }>;
+  topDstPorts: Array<{ port: number; count: number }>;
+}

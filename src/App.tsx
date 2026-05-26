@@ -31,14 +31,18 @@ import { LocalInsightPanel } from './components/LocalInsightPanel';
 import { FlowTable } from './components/FlowTable';
 import { FlowDetailModal } from './components/FlowDetailModal';
 import { SecurityShield } from './components/SecurityShield';
+import { PacketList } from './components/PacketList';
+import { CaptureControls } from './components/CaptureControls';
 
 import { useNetworkData } from './hooks/useNetworkData';
+import { usePcap } from './hooks/usePcap';
 import { CaptureService } from './services/captureService';
 
 import { fetchPublicIP, IPInfo } from './services/ipService';
 
 export default function App() {
   const { flows, stats, history, trends, serviceState, uiState } = useNetworkData();
+  const { packets, session: pcapSession, stats: pcapStats, startCapture, stopCapture, isCapturing: isPcapCapturing } = usePcap();
   const [search, setSearch] = useState('');
   const [exitIpInfo, setExitIpInfo] = useState<IPInfo | null>(null);
 
@@ -51,7 +55,7 @@ export default function App() {
   const [aiLoading, setAiLoading] = useState(false);
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
   const [showError, setShowError] = useState(false);
-  const [mobileView, setMobileView] = useState<'monitor' | 'table'>('monitor');
+  const [mobileView, setMobileView] = useState<'monitor' | 'table' | 'pcap'>('monitor');
 
   // M2: Show error banner when service reports an error
   useEffect(() => {
@@ -363,6 +367,15 @@ export default function App() {
           >
             连接详情
           </button>
+          <button
+            onClick={() => setMobileView('pcap')}
+            className={cn(
+              "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+              mobileView === 'pcap' ? "bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.3)]" : "text-slate-500"
+            )}
+          >
+            PCAP 抓包
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -452,6 +465,30 @@ export default function App() {
                 onSelectFlow={setSelectedFlow} 
                 onExport={handleExportPCAP}
               />
+            </div>
+
+            {/* PCAP Packet Capture */}
+            <div className={cn(
+              "space-y-4",
+              mobileView === 'pcap' ? "block" : "hidden lg:block"
+            )}>
+              <div>
+                <h3 className="text-lg md:text-xl font-bold text-white tracking-tight">PCAP 抓包</h3>
+                <p className="text-xs md:text-sm text-slate-400">实时捕获网络数据包，导出给 Wireshark 分析</p>
+              </div>
+              <CaptureControls
+                session={pcapSession}
+                stats={pcapStats}
+                isRootReady={serviceState.deviceStatus === 'ROOT_READY'}
+                onStart={startCapture}
+                onStop={stopCapture}
+              />
+              <div className="h-[400px]">
+                <PacketList
+                  packets={packets}
+                  isCapturing={isPcapCapturing}
+                />
+              </div>
             </div>
           </div>
 
