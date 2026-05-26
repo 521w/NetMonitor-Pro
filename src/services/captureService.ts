@@ -174,55 +174,55 @@ class ActiveDataSource {
     const flows: Partial<Flow>[] = [];
 
     const tcpResult = await RootExecutor.exec('cat /proc/net/tcp');
+    const udpResult = await RootExecutor.exec('cat /proc/net/udp');
+
+    // 收集所有需要解析的目的 IP（去重）
+    const allSockets: Array<{ sock: RawSocket; protocol: 'TCP' | 'UDP' }> = [];
     if (tcpResult.success) {
-      const tcpSockets = parseProcNetSockets(tcpResult.output, 'TCP');
-      for (const sock of tcpSockets) {
-        const [srcIp, srcPort] = sock.localAddress.split(':');
-        const [dstIp, dstPort] = sock.remoteAddress.split(':');
-
-        if (sock.state === 'LISTEN' || parseInt(dstPort) === 0) continue;
-
-        const iface = await this.resolveInterface(dstIp, 'unknown');
-
-        flows.push({
-          srcIp,
-          srcPort: parseInt(srcPort) || 0,
-          dstIp,
-          dstPort: parseInt(dstPort) || 0,
-          protocol: 'TCP',
-          status: sock.state === 'ESTABLISHED' ? 'active' : 'closed',
-          bytes: 0,
-          packets: 1,
-          process: `uid_${sock.uid}`,
-          interface: iface,
-        });
+      for (const sock of parseProcNetSockets(tcpResult.output, 'TCP')) {
+        allSockets.push({ sock, protocol: 'TCP' });
+      }
+    }
+    if (udpResult.success) {
+      for (const sock of parseProcNetSockets(udpResult.output, 'UDP')) {
+        allSockets.push({ sock, protocol: 'UDP' });
       }
     }
 
-    const udpResult = await RootExecutor.exec('cat /proc/net/udp');
-    if (udpResult.success) {
-      const udpSockets = parseProcNetSockets(udpResult.output, 'UDP');
-      for (const sock of udpSockets) {
-        const [srcIp, srcPort] = sock.localAddress.split(':');
-        const [dstIp, dstPort] = sock.remoteAddress.split(':');
-
-        if (parseInt(dstPort) === 0) continue;
-
+    // 批量解析路由（去重，避免 N+1 shell 命令）
+    const uniqueDsts = new Set<string>();
+    for (const { sock } of allSockets) {
+      const dstIp = sock.remoteAddress.split(':')[0];
+      if (dstIp && dstIp !== '0.0.0.0') uniqueDsts.add(dstIp);
+    }
+    const routeCache = new Map<string, string>();
+    await Promise.all(
+      Array.from(uniqueDsts).map(async (dstIp) => {
         const iface = await this.resolveInterface(dstIp, 'unknown');
+        routeCache.set(dstIp, iface);
+      })
+    );
 
-        flows.push({
-          srcIp,
-          srcPort: parseInt(srcPort) || 0,
-          dstIp,
-          dstPort: parseInt(dstPort) || 0,
-          protocol: 'UDP',
-          status: 'active',
-          bytes: 0,
-          packets: 1,
-          process: `uid_${sock.uid}`,
-          interface: iface,
-        });
-      }
+    for (const { sock, protocol } of allSockets) {
+      const [srcIp, srcPort] = sock.localAddress.split(':');
+      const [dstIp, dstPort] = sock.remoteAddress.split(':');
+
+      if (sock.state === 'LISTEN' || parseInt(dstPort) === 0) continue;
+
+      const iface = routeCache.get(dstIp) || 'unknown';
+
+      flows.push({
+        srcIp,
+        srcPort: parseInt(srcPort) || 0,
+        dstIp,
+        dstPort: parseInt(dstPort) || 0,
+        protocol,
+        status: protocol === 'TCP' ? (sock.state === 'ESTABLISHED' ? 'active' : 'closed') : 'active',
+        bytes: 0,
+        packets: 1,
+        process: `uid_${sock.uid}`,
+        interface: iface,
+      });
     }
 
     return { flows, devStats };
@@ -258,6 +258,9 @@ export class CaptureService {
   private static intervalId: number | null = null;
   private static heartbeatId: number | null = null;
   private static flowIdCounter: number = 0;
+  private static isTickRunning: boolean = false;
+  private static isStopped: boolean = false;
+  private static routeCache: Map<string, string> = new Map();
 
   // ============================================================
   // Listener 管理
@@ -334,6 +337,7 @@ export class CaptureService {
 
   static async initialize() {
     // 先清理上一轮的定时器（防止泄漏）
+    this.isStopped = false;
     this.stopCapture();
 
     await this.detectCapabilities();
@@ -344,7 +348,9 @@ export class CaptureService {
       const bestInterface = interfaces.find((i) => i === 'wlan0') || interfaces.find((i) => i !== 'lo') || 'lo';
 
       this.updateState({ activeInterface: bestInterface, captureStatus: 'IDLE' });
-      this.startHeartbeat();
+      if (!this.isStopped) {
+        this.startHeartbeat();
+      }
     } catch {
       this.updateState({ captureStatus: 'STOPPED', lastError: 'Pipeline initialization failed' });
     }
@@ -361,9 +367,11 @@ export class CaptureService {
   }
 
   static stopCapture() {
+    this.isStopped = true;
     if (this.intervalId) clearInterval(this.intervalId);
     this.intervalId = null;
     this.stopHeartbeat();
+    this.routeCache.clear();
     this.updateState({ captureStatus: 'STOPPED' });
   }
 
@@ -388,6 +396,8 @@ export class CaptureService {
   // ============================================================
 
   private static async pipelineTick() {
+    if (this.isTickRunning) return; // 防止并发执行
+    this.isTickRunning = true;
     try {
       const { flows: rawFlows, devStats } = await this.dataSource.fetch();
 
@@ -443,6 +453,8 @@ export class CaptureService {
       this.notifyFlows();
     } catch (err) {
       console.error('[CaptureService] Pipeline error:', err);
+    } finally {
+      this.isTickRunning = false;
     }
   }
 

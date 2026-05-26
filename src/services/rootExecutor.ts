@@ -44,7 +44,6 @@ private static readonly WHITELIST = new Set([
     'netstat -tuln',
     'ss -tuln',
     'getenforce',
-    'setenforce 0',
     'pm list packages',
     'dumpsys package',
     'top -n 1',
@@ -104,15 +103,15 @@ private static readonly WHITELIST = new Set([
    */
   static async exec(command: string): Promise<ShellResult> {
     // 1. 禁止 shell 元字符（防止命令注入）
-    const SHELL_DANGER_CHARS = [';', '&', '|', '`', '$', '(', ')', '{', '}', '<', '>', '!', '\\', '\n', '\r'];
+    const SHELL_DANGER_CHARS = [';', '&', '|', '`', '$', '(', ')', '{', '}', '<', '>', '!', '\\', '\n', '\r', '"', "'", '#'];
     if (SHELL_DANGER_CHARS.some(ch => command.includes(ch))) {
       console.warn(`[RootShell] Blocked command with shell metacharacters: ${command}`);
       return { success: false, output: 'Command blocked: shell metacharacters not allowed', exitCode: 1, timestamp: Date.now() };
     }
 
-    // 2. 分离基础命令和参数，只允许白名单命令
-    const baseCommand = command.split(' ')[0];
-    const isWhitelisted = this.WHITELIST.has(command) || this.WHITELIST.has(baseCommand);
+    // 2. 精确匹配或前缀匹配白名单命令
+    const isWhitelisted = this.WHITELIST.has(command) ||
+      Array.from(this.WHITELIST).some(entry => command.startsWith(entry));
 
     if (!isWhitelisted) {
       console.warn(`[RootShell] Blocked non-whitelist command: ${command}`);
@@ -155,9 +154,9 @@ private static readonly WHITELIST = new Set([
    */
   private static async execInTermux(command: string): Promise<ShellResult> {
     // 动态导入避免在非 Node 环境报错
-    const { exec: execSync } = await import('child_process');
+    const { exec: execAsync } = await import('child_process');
     return new Promise((resolve) => {
-      execSync(`su -c "${command}"`, { timeout: 5000 }, (error, stdout, stderr) => {
+      execAsync(`su -c "${command}"`, { timeout: 5000 }, (error, stdout, stderr) => {
         resolve({
           success: !error,
           output: stdout || stderr || '',

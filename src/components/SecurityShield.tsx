@@ -9,12 +9,9 @@ interface SecurityShieldProps {
 export const SecurityShield = ({ analysis, uiState }: SecurityShieldProps) => {
   const alerts = analysis ? [
     { type: analysis.risk_level === 'critical' ? '检测到核心隐私泄露' : '正在扫描绕过行为', time: '刚刚', level: analysis.risk_level === 'critical' || analysis.risk_level === 'high' ? 'high' : 'low' },
-    { type: '内核态 eBPF 探针同步', time: '1分钟前', level: 'low' as const },
     ...analysis.threats.map(threat => ({ type: threat, time: '3分钟前', level: 'medium' as const })),
   ] : [
-    { type: '检测到接口混杂模式', time: '12分钟前', level: 'high' as const },
-    { type: '解析物理网卡数据包', time: '45分钟前', level: 'medium' as const },
-    { type: '等待内核态扫描请求', time: '1小时前', level: 'low' as const }
+    { type: '等待安全分析数据...', time: '--', level: 'low' as const },
   ];
 
   const currentLevel = uiState?.threatLevel || analysis?.risk_level || 'low';

@@ -28,7 +28,10 @@ export function isLeakingFlow(flow: Flow): boolean {
     const secondOctet = parseInt(flow.dstIp.split('.')[1]);
     if (secondOctet >= 16 && secondOctet <= 31) return false;
   }
-  if (flow.dstIp === '127.0.0.1' || flow.dstIp === '0.0.0.0') return false;
+  if (flow.dstIp.startsWith('127.') || flow.dstIp === '0.0.0.0') return false;
+
+  // Link-local addresses (169.254.0.0/16) are not leaks
+  if (flow.dstIp.startsWith('169.254.')) return false;
 
   // Multicast and broadcast are not leaks
   if (flow.dstIp.startsWith('224.')) return false;

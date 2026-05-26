@@ -47,7 +47,7 @@ export const NetworkMap = ({ flows, suspiciousIps }: NetworkMapProps) => {
           const x = 200 + r * Math.cos(angle);
           const y = 200 + r * Math.sin(angle);
           
-          const hasSuspicious = portFlows.some(f => suspiciousIps.includes(f.srcIp));
+          const hasSuspicious = portFlows.some(f => suspiciousIps.includes(f.dstIp));
 
           return (
             <g key={port}>

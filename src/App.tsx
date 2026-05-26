@@ -246,7 +246,13 @@ export default function App() {
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold font-mono">TRUSTED</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold font-mono ${
+                serviceState.sourceType === 'passive'
+                  ? 'bg-amber-500/20 text-amber-400'
+                  : 'bg-emerald-500/20 text-emerald-400'
+              }`}>
+                {serviceState.sourceType === 'passive' ? 'NO ROOT' : 'ROOT OK'}
+              </span>
             </div>
           </div>
 
@@ -266,7 +272,13 @@ export default function App() {
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-bold font-mono">TUNNELED</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold font-mono ${
+                exitIpInfo?.ip
+                  ? 'bg-indigo-500/20 text-indigo-400'
+                  : 'bg-slate-500/20 text-slate-400'
+              }`}>
+                {exitIpInfo?.ip ? 'RESOLVED' : 'PENDING'}
+              </span>
             </div>
           </div>
         </div>
