@@ -2,6 +2,7 @@ import { Terminal, Brain, X, Shield, Cpu, Globe, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Flow } from '../types';
 import { cn } from '../lib/utils';
+import { isLeakingFlow } from '../lib/networkUtils';
 
 interface FlowDetailModalProps {
   flow: Flow;
@@ -10,7 +11,7 @@ interface FlowDetailModalProps {
 }
 
 export const FlowDetailModal = ({ flow, onClose, onKill }: FlowDetailModalProps) => {
-  const isLeak = flow.interface !== 'tun0' && flow.interface !== 'lo' && !flow.dstIp.startsWith('192.168.');
+  const isLeak = isLeakingFlow(flow);
   const isLocal = flow.interface === 'lo' || flow.dstIp.startsWith('192.168.');
 
   return (

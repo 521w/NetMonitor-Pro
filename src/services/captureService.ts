@@ -149,6 +149,24 @@ class PassiveDataSource {
  * 在有 root 时读取完整的 /proc/net 数据
  */
 class ActiveDataSource {
+  /**
+   * Determine the egress interface for a destination IP using the routing table.
+   * Falls back to the provided default interface if lookup fails.
+   */
+  private async resolveInterface(dstIp: string, defaultInterface: string): Promise<string> {
+    try {
+      const { success, output } = await RootExecutor.exec(`ip route get ${dstIp}`);
+      if (success) {
+        // Output like: "8.8.8.8 via 192.168.1.1 dev wlan0 src 192.168.1.100"
+        const match = output.match(/\bdev\s+(\S+)/);
+        if (match) return match[1];
+      }
+    } catch {
+      // fall through
+    }
+    return defaultInterface;
+  }
+
   async fetch(): Promise<{ flows: Partial<Flow>[]; devStats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> }> {
     const passive = new PassiveDataSource();
     const { devStats } = await passive.fetch();
@@ -162,7 +180,9 @@ class ActiveDataSource {
         const [srcIp, srcPort] = sock.localAddress.split(':');
         const [dstIp, dstPort] = sock.remoteAddress.split(':');
 
-        if (sock.state === 'LISTEN' || dstPort === '0000') continue;
+        if (sock.state === 'LISTEN' || parseInt(dstPort) === 0) continue;
+
+        const iface = await this.resolveInterface(dstIp, 'unknown');
 
         flows.push({
           srcIp,
@@ -171,10 +191,10 @@ class ActiveDataSource {
           dstPort: parseInt(dstPort) || 0,
           protocol: 'TCP',
           status: sock.state === 'ESTABLISHED' ? 'active' : 'closed',
-          bytes: 0, // /proc/net/tcp does not contain per-flow byte counts
+          bytes: 0,
           packets: 1,
           process: `uid_${sock.uid}`,
-          interface: 'wlan0',
+          interface: iface,
         });
       }
     }
@@ -186,7 +206,9 @@ class ActiveDataSource {
         const [srcIp, srcPort] = sock.localAddress.split(':');
         const [dstIp, dstPort] = sock.remoteAddress.split(':');
 
-        if (dstPort === '0000') continue;
+        if (parseInt(dstPort) === 0) continue;
+
+        const iface = await this.resolveInterface(dstIp, 'unknown');
 
         flows.push({
           srcIp,
@@ -195,10 +217,10 @@ class ActiveDataSource {
           dstPort: parseInt(dstPort) || 0,
           protocol: 'UDP',
           status: 'active',
-          bytes: 0, // /proc/net/udp does not contain per-flow byte counts
+          bytes: 0,
           packets: 1,
           process: `uid_${sock.uid}`,
-          interface: 'wlan0',
+          interface: iface,
         });
       }
     }
@@ -246,9 +268,17 @@ export class CaptureService {
     l(this.state);
   }
 
+  static removeStateListener(l: StateListener) {
+    this.stateListeners = this.stateListeners.filter((fn) => fn !== l);
+  }
+
   static addFlowListener(l: FlowListener) {
     this.flowListeners.push(l);
     l(this.flows);
+  }
+
+  static removeFlowListener(l: FlowListener) {
+    this.flowListeners = this.flowListeners.filter((fn) => fn !== l);
   }
 
   private static updateState(patch: Partial<KernelServiceState>) {
@@ -421,7 +451,8 @@ export class CaptureService {
   // ============================================================
 
   /**
-   * 计算网络统计：bps, pps, CPU 使用率等
+   * 计算网络统计：bps (bytes/sec), pps (packets/sec)
+   * Tick interval is 2 seconds (pipelineTick runs every 2000ms)
    */
   static computeStats(): { totalRxBytes: number; totalTxBytes: number; totalRxPackets: number; totalTxPackets: number; deltaRxBps: number; deltaTxBps: number; deltaRxPps: number; deltaTxPps: number } {
     let totalRxBytes = 0;
@@ -433,6 +464,8 @@ export class CaptureService {
     let deltaRxPps = 0;
     let deltaTxPps = 0;
 
+    const TICK_INTERVAL_SEC = 2; // pipelineTick runs every 2000ms
+
     for (const [iface, curr] of Object.entries(this.stats)) {
       if (iface === 'lo') continue;
       totalRxBytes += curr.rxBytes;
@@ -442,10 +475,10 @@ export class CaptureService {
 
       const prev = this.prevStats[iface];
       if (prev) {
-        deltaRxBps += (curr.rxBytes - prev.rxBytes) * 8; // bytes → bits per tick
-        deltaTxBps += (curr.txBytes - prev.txBytes) * 8;
-        deltaRxPps += curr.rxPackets - prev.rxPackets;
-        deltaTxPps += curr.txPackets - prev.txPackets;
+        deltaRxBps += (curr.rxBytes - prev.rxBytes) / TICK_INTERVAL_SEC; // bytes per second
+        deltaTxBps += (curr.txBytes - prev.txBytes) / TICK_INTERVAL_SEC;
+        deltaRxPps += (curr.rxPackets - prev.rxPackets) / TICK_INTERVAL_SEC;
+        deltaTxPps += (curr.txPackets - prev.txPackets) / TICK_INTERVAL_SEC;
       }
     }
 

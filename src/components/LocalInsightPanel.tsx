@@ -2,6 +2,7 @@ import { RefreshCw, Activity, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AIAnalysis } from '../types';
 import { cn } from '../lib/utils';
+import { isLeakingFlow } from '../lib/networkUtils';
 
 interface LocalInsightPanelProps {
   analysis: AIAnalysis | null;
@@ -11,9 +12,14 @@ interface LocalInsightPanelProps {
 }
 
 export const LocalInsightPanel = ({ analysis, onAnalyze, loading, flows }: LocalInsightPanelProps) => {
-  const leakCount = flows.filter(f => f.interface === 'wlan0' && f.dstIp !== '127.0.0.1' && !f.dstIp.startsWith('192.168.')).length;
+  const leakCount = flows.filter(isLeakingFlow).length;
   const isHighRisk = leakCount > 0;
   const securePercent = flows.length > 0 ? Math.round(((flows.length - leakCount) / flows.length) * 100) : 100;
+
+  // Actual checks based on real data
+  const dnsLeak = flows.some(f => f.dstPort === 53 && isLeakingFlow(f));
+  const udpLeak = flows.some(f => f.protocol === 'UDP' && isLeakingFlow(f));
+  const ipv6Active = flows.some(f => f.dstIp.includes(':'));
 
   return (
     <div className="technical-border rounded-xl p-6 relative overflow-hidden border-indigo-500/30 bg-indigo-500/5">
@@ -67,7 +73,7 @@ export const LocalInsightPanel = ({ analysis, onAnalyze, loading, flows }: Local
           </div>
           <p className="text-[10px] text-slate-400 leading-relaxed uppercase tracking-tight">
             {isHighRisk 
-              ? `警告：检测到 ${leakCount} 条公网连接绕过隧道直接从物理接口 (wlan0) 射出。`
+              ? `警告：检测到 ${leakCount} 条公网连接绕过隧道直接从物理接口射出。`
               : '当前公网流量已全部锁定在加密轨道内。未检测到任何泄露。'}
           </p>
         </div>
@@ -91,10 +97,10 @@ export const LocalInsightPanel = ({ analysis, onAnalyze, loading, flows }: Local
           <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">专项泄露巡检</h4>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { label: 'DNS 劫持审计', status: flows.some(f => f.dstPort === 53 && f.interface !== 'tun0') ? 'LEAK' : 'SAFE', color: flows.some(f => f.dstPort === 53 && f.interface !== 'tun0') ? 'text-rose-500' : 'text-emerald-400' },
-              { label: 'UDP 隧道穿透', status: flows.some(f => f.protocol === 'UDP' && f.interface !== 'tun0') ? 'ALERT' : 'PASS', color: flows.some(f => f.protocol === 'UDP' && f.interface !== 'tun0') ? 'text-amber-500' : 'text-emerald-400' },
-              { label: 'WebRTC 接口', status: 'HIDDEN', color: 'text-blue-400' },
-              { label: 'IPv6 绕过', status: 'LOCKED', color: 'text-indigo-400' }
+              { label: 'DNS 劫持审计', status: dnsLeak ? 'LEAK' : 'SAFE', color: dnsLeak ? 'text-rose-500' : 'text-emerald-400' },
+              { label: 'UDP 隧道穿透', status: udpLeak ? 'ALERT' : 'PASS', color: udpLeak ? 'text-amber-500' : 'text-emerald-400' },
+              { label: 'WebRTC 接口', status: '未检测', color: 'text-slate-500' },
+              { label: 'IPv6 活跃状态', status: ipv6Active ? 'ACTIVE' : 'NONE', color: ipv6Active ? 'text-amber-500' : 'text-emerald-400' },
             ].map((item, i) => (
               <div key={i} className="p-2.5 rounded-lg bg-white/5 border border-white/5">
                 <p className="text-[10px] text-slate-500 font-medium mb-1">{item.label}</p>

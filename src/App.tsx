@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Activity,
   Shield,
   Search,
   Wifi,
@@ -22,6 +21,7 @@ import {
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
+import { isLeakingFlow } from './lib/networkUtils';
 
 import { Flow, AIAnalysis } from './types';
 
@@ -50,9 +50,15 @@ export default function App() {
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
-  const [notifications, setNotifications] = useState(0);
   const [showError, setShowError] = useState(false);
   const [mobileView, setMobileView] = useState<'monitor' | 'table'>('monitor');
+
+  // M2: Show error banner when service reports an error
+  useEffect(() => {
+    if (serviceState.lastError) {
+      setShowError(true);
+    }
+  }, [serviceState.lastError]);
 
   const handleExportPCAP = () => {
     // Export current flows as JSON (real PCAP would require tcpdump with root)
@@ -83,8 +89,7 @@ export default function App() {
   const runAiAnalysis = async () => {
     setAiLoading(true);
     try {
-      // 收集当前流量数据用于分析
-      const leakingFlows = flows.filter((f: Flow) => f.interface !== 'tun0' && f.interface !== 'lo');
+      const leakingFlows = flows.filter(isLeakingFlow);
       const uniqueIPs: string[] = Array.from(new Set(leakingFlows.map((f: Flow) => f.dstIp)));
 
       const analysis: AIAnalysis = {
@@ -147,17 +152,7 @@ export default function App() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <button 
-            onClick={() => setNotifications(0)}
-            className="w-10 h-10 rounded-full hover:bg-white/5 flex items-center justify-center relative transition-colors"
-          >
-            <Activity size={20} className="text-slate-400" />
-            {notifications > 0 && (
-              <span className="absolute top-2 right-2 w-4 h-4 bg-rose-500 rounded-full text-[8px] font-bold flex items-center justify-center border-2 border-[#02010a]">
-                {notifications}
-              </span>
-            )}
-          </button>
+
         </div>
       </nav>
 

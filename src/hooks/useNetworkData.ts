@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Flow, NetworkStats, HistoryPoint, KernelServiceState, UIState } from '../types';
-import { calculateTrend } from '../lib/networkUtils';
+import { calculateTrend, isLeakingFlow } from '../lib/networkUtils';
 import { CaptureService } from '../services/captureService';
 
 export function useNetworkData() {
@@ -14,8 +14,11 @@ export function useNetworkData() {
   // Track when monitoring started for uptime calculation
   const startTimeRef = useRef<number>(Date.now());
 
+  // Store flow listener ref so we can remove it on cleanup
+  const flowListenerRef = useRef<((flows: Flow[]) => void) | null>(null);
+
   const uiState = useMemo<UIState>(() => {
-    const leaking = flows.filter((f) => f.status === 'leaking');
+    const leaking = flows.filter(isLeakingFlow);
     return {
       isKernelActive: serviceState.captureStatus === 'CAPTURING',
       isLeakDetected: leaking.length > 0,
@@ -29,18 +32,17 @@ export function useNetworkData() {
     // Reset uptime on mount
     startTimeRef.current = Date.now();
 
+    // State listener (setState is stable, safe to pass directly)
     CaptureService.addStateListener(setServiceState);
 
-    CaptureService.addFlowListener((allFlows) => {
+    // Flow listener (must store ref for cleanup)
+    const flowListener = (allFlows: Flow[]) => {
       setFlows(allFlows);
 
       const activeCount = allFlows.length;
       const currentBytes = allFlows.reduce((acc, f) => acc + f.bytes, 0);
 
-      // Use CaptureService.computeStats() for real-rate calculations
       const devStats = CaptureService.computeStats();
-
-      // Calculate uptime as seconds since monitoring started
       const uptimeSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
       const newStats: NetworkStats = {
@@ -74,11 +76,22 @@ export function useNetworkData() {
         };
         return [...prev, point].slice(-20);
       });
-    });
+    };
+
+    flowListenerRef.current = flowListener;
+    CaptureService.addFlowListener(flowListener);
 
     CaptureService.initialize();
 
-    return () => CaptureService.stopCapture();
+    // Cleanup: remove listeners AND stop capture
+    return () => {
+      CaptureService.removeStateListener(setServiceState);
+      if (flowListenerRef.current) {
+        CaptureService.removeFlowListener(flowListenerRef.current);
+        flowListenerRef.current = null;
+      }
+      CaptureService.stopCapture();
+    };
   }, []);
 
   return { flows, stats, history, trends, serviceState, uiState };
