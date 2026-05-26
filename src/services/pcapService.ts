@@ -25,19 +25,20 @@ function parseTcpdumpLine(line: string, id: number): CapturedPacket | null {
   const raw = line.trim();
   if (!raw) return null;
 
-  const timeMatch = raw.match(/^(\d{2}:\d{2}:\d{2}\.\d+)/);
+  // Extract time: handles both "HH:MM:SS.usec" and "YYYY-MM-DD HH:MM:SS.usec"
+  const timeMatch = raw.match(/(\d{2}:\d{2}:\d{2}\.\d+)/);
   const time = timeMatch ? timeMatch[1] : '00:00:00.000000';
 
   // ARP — skip
   if (raw.includes('ARP,')) return null;
 
   // IPv6
-  if (raw.startsWith(time + ' IP6 ')) {
+  if (raw.includes(' IP6 ')) {
     return parseIPv6Packet(raw, id, time);
   }
 
-  // IPv4
-  if (raw.startsWith(time + ' IP ')) {
+  // IPv4 — must contain IP but not IP6
+  if (/ IP /.test(raw) && !raw.includes(' IP6 ')) {
     return parseIPv4Packet(raw, id, time);
   }
 
