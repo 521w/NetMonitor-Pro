@@ -255,11 +255,12 @@ export class CaptureService {
 
   private static stateListeners: StateListener[] = [];
   private static flowListeners: FlowListener[] = [];
-  private static intervalId: number | null = null;
-  private static heartbeatId: number | null = null;
+  private static intervalId: ReturnType<typeof setInterval> | null = null;
+  private static heartbeatId: ReturnType<typeof setInterval> | null = null;
   private static flowIdCounter: number = 0;
   private static isTickRunning: boolean = false;
   private static isStopped: boolean = false;
+  private static isInitializing: boolean = false;
   private static routeCache: Map<string, string> = new Map();
 
   // ============================================================
@@ -336,6 +337,12 @@ export class CaptureService {
   // ============================================================
 
   static async initialize() {
+    // Guard against concurrent initialization (HMR, StrictMode double-mount)
+    if (this.isInitializing) {
+      console.warn('[CaptureService] Already initializing, skipping');
+      return;
+    }
+    this.isInitializing = true;
     // 先清理上一轮的定时器（防止泄漏）
     this.isStopped = false;
     this.stopCapture();
@@ -353,6 +360,8 @@ export class CaptureService {
       }
     } catch {
       this.updateState({ captureStatus: 'STOPPED', lastError: 'Pipeline initialization failed' });
+    } finally {
+      this.isInitializing = false;
     }
   }
 
@@ -363,12 +372,12 @@ export class CaptureService {
   static async startCapture() {
     if (this.state.captureStatus === 'CAPTURING') return;
     this.updateState({ captureStatus: 'CAPTURING' });
-    this.intervalId = window.setInterval(() => this.pipelineTick(), 2000);
+    this.intervalId = setInterval(() => this.pipelineTick(), 2000);
   }
 
   static stopCapture() {
     this.isStopped = true;
-    if (this.intervalId) clearInterval(this.intervalId);
+    if (this.intervalId !== null) clearInterval(this.intervalId);
     this.intervalId = null;
     this.stopHeartbeat();
     this.routeCache.clear();
@@ -376,7 +385,7 @@ export class CaptureService {
   }
 
   private static startHeartbeat() {
-    this.heartbeatId = window.setInterval(() => {
+    this.heartbeatId = setInterval(() => {
       console.log(
         `[KernelHeartbeat] Status: ${this.state.captureStatus}, Source: ${this.state.sourceType}, ` +
           `Flows: ${this.flows.length}, Interface: ${this.state.activeInterface}`
@@ -412,7 +421,8 @@ export class CaptureService {
       const prevTotalBytes = Object.entries(this.prevStats)
         .filter(([iface]) => iface !== 'lo')
         .reduce((sum, [, s]) => sum + s.rxBytes + s.txBytes, 0);
-      const deltaBytes = currentTotalBytes - prevTotalBytes;
+      // Clamp to 0: interface counters can reset (driver reload, 32-bit overflow)
+      const deltaBytes = Math.max(0, currentTotalBytes - prevTotalBytes);
 
       // 每 flow 均分本轮流量变化
       const bytesPerFlow = rawFlows.length > 0 ? Math.floor(deltaBytes / rawFlows.length) : 0;
@@ -487,10 +497,11 @@ export class CaptureService {
 
       const prev = this.prevStats[iface];
       if (prev) {
-        deltaRxBps += (curr.rxBytes - prev.rxBytes) / TICK_INTERVAL_SEC; // bytes per second
-        deltaTxBps += (curr.txBytes - prev.txBytes) / TICK_INTERVAL_SEC;
-        deltaRxPps += (curr.rxPackets - prev.rxPackets) / TICK_INTERVAL_SEC;
-        deltaTxPps += (curr.txPackets - prev.txPackets) / TICK_INTERVAL_SEC;
+        // Clamp deltas to 0 to handle counter resets / 32-bit overflow
+        deltaRxBps += Math.max(0, curr.rxBytes - prev.rxBytes) / TICK_INTERVAL_SEC;
+        deltaTxBps += Math.max(0, curr.txBytes - prev.txBytes) / TICK_INTERVAL_SEC;
+        deltaRxPps += Math.max(0, curr.rxPackets - prev.rxPackets) / TICK_INTERVAL_SEC;
+        deltaTxPps += Math.max(0, curr.txPackets - prev.txPackets) / TICK_INTERVAL_SEC;
       }
     }
 
@@ -503,5 +514,27 @@ export class CaptureService {
 
   static getState(): KernelServiceState {
     return this.state;
+  }
+
+  /**
+   * 重置所有静态状态（HMR / 测试环境用）
+   */
+  static reset() {
+    this.stopCapture();
+    this.flows = [];
+    this.stats = {};
+    this.prevStats = {};
+    this.flowIdCounter = 0;
+    this.isInitializing = false;
+    this.stateListeners = [];
+    this.flowListeners = [];
+    this.state = {
+      deviceStatus: 'UNCHECKED',
+      captureStatus: 'IDLE',
+      activeInterface: null,
+      lastError: null,
+      sourceType: 'passive',
+      capability: { hasRoot: false, hasPcap: false, hasNetLink: false, selinuxEnforced: true },
+    };
   }
 }

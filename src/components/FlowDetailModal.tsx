@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Terminal, Brain, X, Shield, Cpu, Globe, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Flow } from '../types';
@@ -13,6 +14,15 @@ interface FlowDetailModalProps {
 export const FlowDetailModal = ({ flow, onClose, onKill }: FlowDetailModalProps) => {
   const isLeak = isLeakingFlow(flow);
   const isLocal = flow.interface === 'lo' || flow.dstIp.startsWith('192.168.');
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-lg">

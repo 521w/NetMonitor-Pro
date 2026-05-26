@@ -333,23 +333,25 @@ export class PcapService {
     writeFile: boolean,
     pcapPath?: string,
   ): string {
+    // Validate interface name (alphanumeric, dots, hyphens, underscores only)
+    const safeIface = /^[a-zA-Z0-9.\-_]+$/.test(iface) ? iface : 'any';
+
     const parts: string[] = ['tcpdump'];
 
     if (writeFile) {
-      // 文件模式
-      parts.push(`-i ${iface}`);
+      parts.push(`-i ${safeIface}`);
       parts.push(`-w ${pcapPath}`);
       parts.push('-C 500'); // 500MB 分卷
     } else {
-      // 文本模式
       parts.push('-l');         // 行缓冲（实时输出）
-      parts.push(`-i ${iface}`);
+      parts.push(`-i ${safeIface}`);
       parts.push('-nn');        // 不解析域名
       parts.push('-tttt');      // 显示完整时间
       parts.push('-c 10000');   // 最多抓 10000 个包（安全限制）
     }
 
-    if (filter) {
+    // Validate BPF filter — only allow safe BPF syntax chars
+    if (filter && /^[a-zA-Z0-9\s\.\:\(\)\!\=\>\<\-\/]+$/.test(filter)) {
       parts.push(filter);
     }
 
@@ -358,12 +360,16 @@ export class PcapService {
 
   /**
    * 运行文本模式 tcpdump 并逐行解析
+   * 使用 execFile 数组参数避免 shell 注入
    */
   private static startTextCapture(cmd: string) {
-    // 通过 RootExecutor 的 child_process 执行
-    // 我们需要直接访问 child_process 来逐行读取
-    import('child_process').then(({ exec }) => {
-      const proc = exec(`su -c "${cmd}"`, {
+    import('child_process').then(({ execFile }) => {
+      // 拆分命令为数组（tcpdump -l -i wlan0 -nn -tttt -c 10000）
+      const args = cmd.split(/\s+/);
+      const binary = args.shift() || 'tcpdump';
+
+      // execFile 不走 shell，用 su 包一层执行 root 命令
+      const proc = execFile('su', ['-c', [binary, ...args].join(' ')], {
         timeout: 600_000, // 10 分钟超时
         maxBuffer: 50 * 1024 * 1024, // 50MB buffer
       });

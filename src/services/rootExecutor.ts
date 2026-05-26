@@ -21,9 +21,10 @@ export class RootExecutor {
   private static isTermux: boolean = false;
 
   /**
- * 安全白名单：精确匹配允许执行的命令
- * 包含：系统信息查询、网络监控、进程管理
- */
+   * 安全白名单：精确匹配 + 受限前缀匹配
+   * 前缀匹配仅允许路径类命令追加安全后缀（字母、数字、/、.、-、_）
+   * 严禁 .. 路径遍历和 shell 元字符
+   */
 private static readonly WHITELIST = new Set([
     'id',
     'ls /sys/class/net',
@@ -45,13 +46,12 @@ private static readonly WHITELIST = new Set([
     'ss -tuln',
     'getenforce',
     'pm list packages',
+    'pm list packages -U',
     'dumpsys package',
     'top -n 1',
     'ps -A',
-    'tcpdump --version',
     'tcpdump',
     'pkill -f tcpdump',
-    'pkill -f "tcpdump.*netmonitor"',
     'cat /data/system/packages.list',
     'ls -l /data/data/',
     'df -h',
@@ -59,6 +59,19 @@ private static readonly WHITELIST = new Set([
     'uname -a',
     'getprop ro.',
 ]);
+
+  /**
+   * 校验前缀匹配后的命令后缀是否安全
+   * 仅允许：字母 数字 / . - _ 空格
+   * 拒绝：.. 路径遍历、shell 元字符
+   */
+  private static isSafeSuffix(suffix: string): boolean {
+    if (!suffix) return true; // 精确匹配，无后缀
+    // 拒绝路径遍历
+    if (suffix.includes('..')) return false;
+    // 仅允许路径安全字符 + 空格（用于参数）
+    return /^[a-zA-Z0-9/\.\-_ ]+$/.test(suffix);
+  }
 
   /**
    * 检测是否在 Termux 环境中
@@ -114,8 +127,18 @@ private static readonly WHITELIST = new Set([
     }
 
     // 2. 精确匹配或前缀匹配白名单命令
-    const isWhitelisted = this.WHITELIST.has(command) ||
-      Array.from(this.WHITELIST).some(entry => command.startsWith(entry));
+    let isWhitelisted = this.WHITELIST.has(command);
+    if (!isWhitelisted) {
+      for (const entry of Array.from(this.WHITELIST)) {
+        if (command.startsWith(entry)) {
+          const suffix = command.slice(entry.length);
+          if (this.isSafeSuffix(suffix)) {
+            isWhitelisted = true;
+            break;
+          }
+        }
+      }
+    }
 
     if (!isWhitelisted) {
       console.warn(`[RootShell] Blocked non-whitelist command: ${command}`);
@@ -131,7 +154,8 @@ private static readonly WHITELIST = new Set([
       // @ts-ignore
       const { Shell } = Plugins;
       if (Shell) {
-        const result = await Shell.run({ command: `su -c "${command}"` });
+        // 使用数组参数避免 shell 注入（不走 sh -c 拼接）
+        const result = await Shell.run({ command: 'su', arguments: ['-c', command] });
         return {
           success: result.code === 0,
           output: result.output || '',
@@ -154,17 +178,17 @@ private static readonly WHITELIST = new Set([
   }
 
   /**
-   * 在 Termux 中执行命令（使用 child_process）
+   * 在 Termux 中执行命令（使用 execFile 数组参数避免 shell 注入）
    */
   private static async execInTermux(command: string): Promise<ShellResult> {
-    // 动态导入避免在非 Node 环境报错
-    const { exec: execAsync } = await import('child_process');
+    const { execFile: execFileAsync } = await import('child_process');
     return new Promise((resolve) => {
-      execAsync(`su -c "${command}"`, { timeout: 5000 }, (error, stdout, stderr) => {
+      // execFile 不走 shell，数组参数避免注入
+      execFileAsync('su', ['-c', command], { timeout: 5000 }, (error, stdout, stderr) => {
         resolve({
           success: !error,
           output: stdout || stderr || '',
-          exitCode: error ? error.code || 1 : 0,
+          exitCode: error ? (typeof error.code === 'number' ? error.code : 1) : 0,
           timestamp: Date.now(),
         });
       });

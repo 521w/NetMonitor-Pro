@@ -49,8 +49,8 @@ export const SecurityShield = ({ analysis, uiState }: SecurityShieldProps) => {
 
         <div className="space-y-3">
           <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">审计实时流</h4>
-          {alerts.map((event, i) => (
-            <div key={i} className="flex items-center justify-between p-2 hover:bg-white/5 rounded transition-colors cursor-pointer group">
+          {alerts.map((event) => (
+            <div key={`${event.type}-${event.level}-${event.time}`} className="flex items-center justify-between p-2 hover:bg-white/5 rounded transition-colors cursor-pointer group">
               <div className="flex items-center gap-3">
                 <div className={`w-1 h-8 rounded-full ${
                   event.level === 'high' ? 'bg-rose-500' : 
