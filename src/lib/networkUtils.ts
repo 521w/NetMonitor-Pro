@@ -37,5 +37,12 @@ export function isLeakingFlow(flow: Flow): boolean {
   if (flow.dstIp.startsWith('224.')) return false;
   if (flow.dstIp === '255.255.255.255') return false;
 
+  // M1: IPv6 private/local addresses are not leaks
+  if (flow.dstIp === '::1') return false;                          // IPv6 loopback
+  if (flow.dstIp.startsWith('fc') || flow.dstIp.startsWith('fd')) return false; // ULA (fc00::/7)
+  if (flow.dstIp.startsWith('fe80:')) return false;                // link-local (fe80::/10)
+  if (flow.dstIp.startsWith('ff')) return false;                   // multicast (ff00::/8)
+  if (flow.dstIp === '::') return false;                           // IPv6 unspecified
+
   return true;
 }

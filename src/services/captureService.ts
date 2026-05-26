@@ -261,6 +261,7 @@ export class CaptureService {
   private static isTickRunning: boolean = false;
   private static isStopped: boolean = false;
   private static isInitializing: boolean = false;
+  // M6: reset counter in initialize() so IDs stay small across start/stop cycles
   private static routeCache: Map<string, string> = new Map();
 
   // ============================================================
@@ -346,6 +347,7 @@ export class CaptureService {
     // 先清理上一轮的定时器（防止泄漏）
     this.isStopped = false;
     this.stopCapture();
+    this.flowIdCounter = 0;
 
     await this.detectCapabilities();
 
@@ -455,7 +457,7 @@ export class CaptureService {
       // 合并新旧流（去重 + 更新）
       const mergedMap = new Map<string, Flow>();
       for (const f of [...this.flows, ...enrichedFlows]) {
-        const key = `${f.srcIp}:${f.srcPort}-${f.dstIp}:${f.dstPort}-${f.protocol}`;
+        const key = `${f.srcIp}:${f.srcPort}-${f.dstIp}:${f.dstPort}-${f.protocol}-${f.interface}`;
         mergedMap.set(key, f);
       }
 

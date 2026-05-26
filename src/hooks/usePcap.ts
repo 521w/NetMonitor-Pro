@@ -8,42 +8,56 @@ export function usePcap() {
   const [session, setSession] = useState<CaptureSession>(PcapService.getSession());
   const [stats, setStats] = useState<CaptureStats>(PcapService.getStats());
   const statsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isCapturingRef = useRef(false);
 
-  // 包监听器
+  const startStatsTimer = useCallback(() => {
+    if (statsTimerRef.current) return;
+    statsTimerRef.current = setInterval(() => {
+      setStats(PcapService.getStats());
+    }, 1000);
+  }, []);
+
+  const stopStatsTimer = useCallback(() => {
+    if (statsTimerRef.current) {
+      clearInterval(statsTimerRef.current);
+      statsTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     const packetListener = (pkt: CapturedPacket) => {
       setPackets(prev => {
         const next = [...prev, pkt];
-        // 保留最近 5000 个包
         return next.length > 5000 ? next.slice(-5000) : next;
       });
     };
 
     const sessionListener = (s: CaptureSession) => {
       setSession(s);
+      // M5: Only run stats timer while capturing
+      const nowCapturing = s.status === 'capturing';
+      if (nowCapturing && !isCapturingRef.current) {
+        startStatsTimer();
+      } else if (!nowCapturing && isCapturingRef.current) {
+        stopStatsTimer();
+        // Final stats refresh on stop
+        setStats(PcapService.getStats());
+      }
+      isCapturingRef.current = nowCapturing;
     };
 
     PcapService.addPacketListener(packetListener);
     PcapService.addSessionListener(sessionListener);
 
-    // 定期刷新统计（每秒）
-    statsTimerRef.current = setInterval(() => {
-      setStats(PcapService.getStats());
-    }, 1000);
-
     return () => {
       PcapService.removePacketListener(packetListener);
       PcapService.removeSessionListener(sessionListener);
-      if (statsTimerRef.current) {
-        clearInterval(statsTimerRef.current);
-      }
+      stopStatsTimer();
     };
-  }, []);
+  }, [startStatsTimer, stopStatsTimer]);
 
   const startCapture = useCallback(async (iface: string, filter: string) => {
-    // 预加载 UID 映射
     loadUidMap().catch(() => {});
-    // 清空旧数据
     setPackets([]);
     setStats(PcapService.getStats());
     await PcapService.startCapture(iface, filter);
@@ -51,7 +65,6 @@ export function usePcap() {
 
   const stopCapture = useCallback(async () => {
     await PcapService.stopCapture();
-    // 最终刷新统计
     setStats(PcapService.getStats());
   }, []);
 
