@@ -21,10 +21,10 @@ export class RootExecutor {
   private static isTermux: boolean = false;
 
   /**
-   * 安全白名单：只允许执行这些命令前缀
-   * 包含：系统信息查询、网络监控、进程管理
-   */
-  private static readonly WHITELIST = [
+ * 安全白名单：精确匹配允许执行的命令
+ * 包含：系统信息查询、网络监控、进程管理
+ */
+private static readonly WHITELIST = new Set([
     'id',
     'ls /sys/class/net',
     'ls /proc/net/',
@@ -56,7 +56,7 @@ export class RootExecutor {
     'free -m',
     'uname -a',
     'getprop ro.',
-  ];
+]);
 
   /**
    * 检测是否在 Termux 环境中
@@ -104,7 +104,16 @@ export class RootExecutor {
    * 在 Capacitor 中：通过原生 bridge 调用 su -c
    */
   static async exec(command: string): Promise<ShellResult> {
-    const isWhitelisted = this.WHITELIST.some((cmd) => command.startsWith(cmd));
+    // 1. 禁止 shell 元字符（防止命令注入）
+    const SHELL_DANGER_CHARS = [';', '&', '|', '`', '$', '(', ')', '{', '}', '<', '>', '!', '\\', '\n', '\r'];
+    if (SHELL_DANGER_CHARS.some(ch => command.includes(ch))) {
+      console.warn(`[RootShell] Blocked command with shell metacharacters: ${command}`);
+      return { success: false, output: 'Command blocked: shell metacharacters not allowed', exitCode: 1, timestamp: Date.now() };
+    }
+
+    // 2. 分离基础命令和参数，只允许白名单命令
+    const baseCommand = command.split(' ')[0];
+    const isWhitelisted = this.WHITELIST.has(command) || this.WHITELIST.has(baseCommand);
 
     if (!isWhitelisted) {
       console.warn(`[RootShell] Blocked non-whitelist command: ${command}`);
@@ -184,7 +193,10 @@ rmnet_data0: 50000     500    0    0    0     0          0         0    50000   
       'top -n 1': 'PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\n1234 root      20   0  100000  50000  20000 S  10.0   2.5   0:30.00 chrome',
     };
 
-    const output = mocks[command] || 'success';
+const output = mocks[command];
+    if (!output) {
+      return { success: false, output: `No mock available for: ${command}`, exitCode: 127, timestamp: Date.now() };
+    }
     return { success: true, output, exitCode: 0, timestamp: Date.now() };
   }
 

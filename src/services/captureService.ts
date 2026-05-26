@@ -234,6 +234,7 @@ export class CaptureService {
   private static stateListeners: StateListener[] = [];
   private static flowListeners: FlowListener[] = [];
   private static intervalId: number | null = null;
+  private static heartbeatId: number | null = null;
   private static flowIdCounter: number = 0;
 
   // ============================================================
@@ -302,6 +303,9 @@ export class CaptureService {
   // ============================================================
 
   static async initialize() {
+    // 先清理上一轮的定时器（防止泄漏）
+    this.stopCapture();
+
     await this.detectCapabilities();
 
     try {
@@ -329,16 +333,24 @@ export class CaptureService {
   static stopCapture() {
     if (this.intervalId) clearInterval(this.intervalId);
     this.intervalId = null;
+    this.stopHeartbeat();
     this.updateState({ captureStatus: 'STOPPED' });
   }
 
   private static startHeartbeat() {
-    window.setInterval(() => {
+    this.heartbeatId = window.setInterval(() => {
       console.log(
         `[KernelHeartbeat] Status: ${this.state.captureStatus}, Source: ${this.state.sourceType}, ` +
           `Flows: ${this.flows.length}, Interface: ${this.state.activeInterface}`
       );
     }, 5000);
+  }
+
+  private static stopHeartbeat() {
+    if (this.heartbeatId) {
+      clearInterval(this.heartbeatId);
+      this.heartbeatId = null;
+    }
   }
 
   // ============================================================
