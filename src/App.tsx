@@ -42,7 +42,7 @@ import { useNetworkData } from './hooks/useNetworkData';
 import { RootExecutor } from './services/rootExecutor';
 import { CaptureService } from './services/captureService';
 
-import { fetchPublicIP, IPInfo, MOCK_REAL_ISP_IP, MOCK_REAL_ISP_LOC } from './services/ipService';
+import { fetchPublicIP, IPInfo } from './services/ipService';
 
 export default function App() {
   const { flows, stats, history, error, trends, serviceState, uiState, setFlows } = useNetworkData(); 
@@ -83,19 +83,20 @@ export default function App() {
   const runAiAnalysis = async () => {
     setAiLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 1500));
-      const leaks = flows.filter(f => f.interface === 'wlan0');
-      
+      // 收集当前流量数据用于分析
+      const leakingFlows = flows.filter((f) => f.interface !== 'tun0' && f.interface !== 'lo');
+      const uniqueIPs = [...new Set(leakingFlows.map((f) => f.dstIp))];
+
       const analysis: AIAnalysis = {
-        privacy_score: leaks.length > 0 ? 35 : 98,
-        risk_level: leaks.length > 3 ? 'critical' : (leaks.length > 0 ? 'high' : 'low'),
-        threats: leaks.map(l => `发现进程 ${l.process} 正在通过物理网卡泄露数据`),
-        suspicious_ips: leaks.map(l => l.dstIp),
-        recommendations: [
-          "强制阻断所有非 tun0 接口的外部连接",
-          "开启 DNS 劫持防护 (iptables 指令注入)",
-          "检查 system-resolver 配置文件"
-        ]
+        privacy_score: leakingFlows.length > 0 ? Math.max(0, 100 - leakingFlows.length * 5) : 98,
+        risk_level: leakingFlows.length > 5 ? 'critical' : leakingFlows.length > 0 ? 'high' : 'low',
+        threats: leakingFlows.map(
+          (l) => `Suspicious: process "${l.process}" sending data via ${l.interface} to ${l.dstIp}:${l.dstPort}`
+        ),
+        suspicious_ips: uniqueIPs,
+        recommendations: leakingFlows.length > 0
+          ? ['Review processes bypassing VPN tunnel', 'Consider iptables rules to force all traffic through tun0', 'Check DNS leaks via external service']
+          : ['All traffic appears to be routed through VPN tunnel'],
       };
       setAiAnalysis(analysis);
     } catch (err) {
@@ -105,12 +106,16 @@ export default function App() {
     }
   };
 
-  const handleKillProcess = async (id: string) => {
-    const flow = flows.find(f => f.id === id);
+  const handleKillProcess = async (flowId: string) => {
+    const flow = flows.find((f) => f.id === flowId);
     if (!flow) return;
 
-    await RootExecutor.exec(`kill -9 ${flow.process}_PID`);
-    alert(`Root: 进程 [${flow.process}] 已通过内核信号强制阻断。`);
+    // 在当前实现中，我们无法直接跨进程杀进程。
+    // 提示用户需要手动执行（CAP_NET_RAW 或 root 权限）
+    alert(
+      `To block "${flow.process}" (${flow.srcIp}:${flow.srcPort} → ${flow.dstIp}:${flow.dstPort}):\n\n` +
+        `Run: su -c "iptables -A OUTPUT -p ${flow.protocol} -d ${flow.dstIp} --dport ${flow.dstPort} -j DROP"`
+    );
     setSelectedFlow(null);
   };
 
@@ -236,11 +241,11 @@ export default function App() {
                 <Globe size={20} className="text-slate-400" />
               </div>
               <div>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">本地真实 IP (ISP)</p>
+                <p className="text-[10px] text-slate-500 uppercase font-bold">Kernel Service State</p>
                 <p className="text-sm font-mono font-bold text-white">
-                  {MOCK_REAL_ISP_IP} 
+                  {serviceState.sourceType.toUpperCase()}
                   <span className="text-[10px] text-slate-500 font-normal ml-2">
-                    ({MOCK_REAL_ISP_LOC})
+                    ({serviceState.activeInterface || '--'})
                   </span>
                 </p>
               </div>

@@ -1,5 +1,7 @@
 export type DeviceStatus = 'UNCHECKED' | 'ROOT_READY' | 'ROOT_DENIED' | 'DRIVER_ERROR';
+
 export type CaptureStatus = 'IDLE' | 'PROBING' | 'CAPTURING' | 'STOPPED';
+
 export type DataSourceType = 'ebpf' | 'tcpdump' | 'vpn' | 'passive';
 
 export interface DeviceCapability {
@@ -18,13 +20,10 @@ export interface KernelServiceState {
   sourceType: DataSourceType;
 }
 
-/**
- * SourceMetadata - 标注数据来源与类型
- */
 export interface SourceMetadata {
   source: DataSourceType;
   timestamp: string;
-  reliability: number; // 0-1
+  reliability: number;
 }
 
 export interface Flow {

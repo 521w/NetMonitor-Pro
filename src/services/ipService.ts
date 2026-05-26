@@ -1,4 +1,3 @@
-
 export interface IPInfo {
   ip: string;
   city: string;
@@ -7,30 +6,46 @@ export interface IPInfo {
   org: string;
 }
 
+/**
+ * Fetch the device's public exit IP via ipapi.co.
+ * Falls back to ifconfig.me if ipapi.co fails.
+ */
 export const fetchPublicIP = async (): Promise<IPInfo> => {
+  // Try ipapi.co first
   try {
-    // 尝试获取当前外部可见 IP (作为出口 IP)
     const response = await fetch('https://ipapi.co/json/');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
+    if (data.error) throw new Error(data.reason || 'ipapi error');
     return {
       ip: data.ip,
       city: data.city,
       region: data.region,
       country: data.country_name,
-      org: data.org
+      org: data.org,
     };
-  } catch (error) {
-    console.error('Failed to fetch IP info:', error);
-    return {
-      ip: '27.189.124.62', // 默认模拟一个东京出口
-      city: 'Tokyo',
-      region: 'Tokyo',
-      country: 'Japan',
-      org: 'Amazon Data Services'
-    };
+  } catch {
+    // fallback to ifconfig.me
+    try {
+      const response = await fetch('https://ifconfig.me/all.json');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      return {
+        ip: data.ip_addr,
+        city: '',
+        region: '',
+        country: data.country || '',
+        org: data.user_agent || '',
+      };
+    } catch {
+      // last resort: raw IP
+      try {
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        return { ip: data.ip, city: '', region: '', country: '', org: '' };
+      } catch {
+        return { ip: 'Unavailable', city: '', region: '', country: '', org: '' };
+      }
+    }
   }
 };
-
-// 预设一个模拟的真实 ISP IP (用于对比审计)
-export const MOCK_REAL_ISP_IP = '123.116.88.241'; 
-export const MOCK_REAL_ISP_LOC = '北京 联通';

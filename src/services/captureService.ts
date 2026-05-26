@@ -1,70 +1,222 @@
+/**
+ * CaptureService - 网络流量捕获核心
+ *
+ * 从 Android 内核读取真实网络数据：
+ *   - /proc/net/dev   → 接口流量统计（bps, pps）
+ *   - /proc/net/tcp    → TCP 连接表
+ *   - /proc/net/udp    → UDP 连接表
+ *   - /sys/class/net   → 网络接口列表
+ *
+ * 无 root 时使用 /proc/net/xt_qtaguid/iface_stat_all（应用级流量统计）
+ */
 
-import { Flow, KernelServiceState, CaptureStatus, DataSourceType, SourceMetadata } from '../types';
+import { Flow, KernelServiceState, DataSourceType, SourceMetadata } from '../types';
 import { RootExecutor } from './rootExecutor';
-import { MOCK_REAL_ISP_IP } from './ipService';
 
 export type StateListener = (state: KernelServiceState) => void;
 export type FlowListener = (flows: Flow[]) => void;
 
-interface IDataSource {
-  fetch(): Partial<Flow>;
+// ============================================================
+// Flow 数据结构
+// ============================================================
+
+interface RawSocket {
+  localAddress: string;
+  remoteAddress: string;
+  state: string;
+  uid: number;
+  inode: number;
 }
 
-class PassiveDataSource implements IDataSource {
-  fetch(): Partial<Flow> {
-    const isLeak = Math.random() > 0.95;
-    return {
-      srcIp: isLeak ? MOCK_REAL_ISP_IP : '10.0.0.1',
-      srcPort: 12345,
-      dstIp: '8.8.8.8',
-      dstPort: 53,
-      protocol: 'UDP',
-      status: 'active',
-      bytes: 64,
-      packets: 1,
-      process: 'system-dns',
-      interface: isLeak ? 'wlan0' : 'tun0'
+// ============================================================
+// /proc/net 解析工具
+// ============================================================
+
+function parseHexIP(hex: string): string {
+  // /proc/net 中的 IP 用 little-endian hex 编码
+  // "0B00007F" → 127.0.0.1
+  const parts: string[] = [];
+  for (let i = hex.length - 2; i >= 0; i -= 2) {
+    parts.push(parseInt(hex.substring(i, i + 2), 16).toString());
+  }
+  return parts.join('.');
+}
+
+function parseHexPort(hex: string): number {
+  return parseInt(hex, 16);
+}
+
+function parseTCPState(code: string): string {
+  const states: Record<string, string> = {
+    '01': 'ESTABLISHED',
+    '02': 'SYN_SENT',
+    '03': 'SYN_RECV',
+    '04': 'FIN_WAIT1',
+    '05': 'FIN_WAIT2',
+    '06': 'TIME_WAIT',
+    '07': 'CLOSE',
+    '08': 'CLOSE_WAIT',
+    '09': 'LAST_ACK',
+    '0A': 'LISTEN',
+    '0B': 'CLOSING',
+  };
+  return states[code] || 'UNKNOWN';
+}
+
+/**
+ * 解析 /proc/net/tcp 或 /proc/net/udp
+ * 格式：
+ *   sl  local_address rem_address   st tx_queue rx_queue tr ...
+ *    0: 0B00007F:1F90 0100007F:0050 01 00000000:00000000 00:...
+ */
+function parseProcNetSockets(raw: string, protocol: 'TCP' | 'UDP'): RawSocket[] {
+  const sockets: RawSocket[] = [];
+  const lines = raw.split('\n').slice(1); // skip header
+
+  for (const line of lines) {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 10) continue;
+
+    const localParts = parts[1].split(':');
+    const remoteParts = parts[2].split(':');
+    const state = protocol === 'TCP' ? parseTCPState(parts[3]) : 'active';
+    const uid = parseInt(parts[7]) || 0;
+
+    sockets.push({
+      localAddress: `${parseHexIP(localParts[0])}:${parseHexPort(localParts[1])}`,
+      remoteAddress: `${parseHexIP(remoteParts[0])}:${parseHexPort(remoteParts[1])}`,
+      state,
+      uid,
+      inode: parseInt(parts[9]) || 0,
+    });
+  }
+
+  return sockets;
+}
+
+/**
+ * 解析 /proc/net/dev 获取每接口的字节/包统计
+ * 返回：{ iface: { rxBytes, txBytes, rxPackets, txPackets } }
+ */
+function parseProcNetDev(raw: string): Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> {
+  const stats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> = {};
+  const lines = raw.split('\n').slice(2); // skip headers
+
+  for (const line of lines) {
+    const iface = line.trim().match(/^(\w+):/);
+    if (!iface) continue;
+
+    const name = iface[1];
+    const parts = line.trim().split(/\s+/);
+    // Format: face |bytes    packets ... |bytes    packets ...
+    // Index: 0=face:  1=rxBytes  2=rxPackets ...  9=txBytes  10=txPackets
+    stats[name] = {
+      rxBytes: parseInt(parts[1]) || 0,
+      rxPackets: parseInt(parts[2]) || 0,
+      txBytes: parseInt(parts[9]) || 0,
+      txPackets: parseInt(parts[10]) || 0,
     };
   }
+
+  return stats;
 }
 
-class ActiveDataSource implements IDataSource {
-  fetch(): Partial<Flow> {
-    const isLeak = Math.random() > 0.7;
-    return {
-      srcIp: isLeak ? MOCK_REAL_ISP_IP : '10.0.0.2',
-      srcPort: 44332,
-      dstIp: isLeak ? '142.251.42.14' : '10.0.0.1',
-      dstPort: 443,
-      protocol: 'TCP',
-      status: isLeak ? 'leaking' : 'active',
-      bytes: Math.floor(Math.random() * 2000),
-      packets: 5,
-      process: isLeak ? 'ad-tracker' : 'com.google.android.gms',
-      interface: isLeak ? 'wlan0' : 'tun0'
-    };
+// ============================================================
+// 真实数据源
+// ============================================================
+
+/**
+ * PassiveDataSource - 无 root 数据源
+ * 读取 /proc/net/xt_qtaguid/iface_stat_all（Android 应用级统计）
+ */
+class PassiveDataSource {
+  async fetch(): Promise<{ flows: Partial<Flow>[]; devStats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> }> {
+    // 尝试读取应用级流量统计（无需 root）
+    const devResult = await RootExecutor.exec('cat /proc/net/dev');
+    let devStats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> = {};
+
+    if (devResult.success) {
+      devStats = parseProcNetDev(devResult.output);
+    }
+
+    // 无 root 时尝试 TCP/UDP 表（可能需要 root，失败则返回空）
+    const tcpResult = await RootExecutor.exec('cat /proc/net/tcp');
+    const udpResult = await RootExecutor.exec('cat /proc/net/udp');
+
+    const flows: Partial<Flow>[] = [];
+
+    if (tcpResult.success) {
+      const tcpSockets = parseProcNetSockets(tcpResult.output, 'TCP');
+      for (const sock of tcpSockets) {
+        const [srcIp, srcPort] = sock.localAddress.split(':');
+        const [dstIp, dstPort] = sock.remoteAddress.split(':');
+
+        // 过滤掉 LISTEN 状态的本地端口（0.0.0.0:0）
+        if (sock.state === 'LISTEN' || dstPort === '0000') continue;
+
+        flows.push({
+          srcIp,
+          srcPort: parseInt(srcPort) || 0,
+          dstIp,
+          dstPort: parseInt(dstPort) || 0,
+          protocol: 'TCP',
+          status: sock.state === 'ESTABLISHED' ? 'active' : 'closed',
+          bytes: 0, // /proc/net/tcp 不提供字节数
+          packets: 1,
+          process: `uid_${sock.uid}`,
+          interface: 'wlan0',
+        });
+      }
+    }
+
+    if (udpResult.success) {
+      const udpSockets = parseProcNetSockets(udpResult.output, 'UDP');
+      for (const sock of udpSockets) {
+        const [srcIp, srcPort] = sock.localAddress.split(':');
+        const [dstIp, dstPort] = sock.remoteAddress.split(':');
+
+        if (dstPort === '0000') continue;
+
+        flows.push({
+          srcIp,
+          srcPort: parseInt(srcPort) || 0,
+          dstIp,
+          dstPort: parseInt(dstPort) || 0,
+          protocol: 'UDP',
+          status: 'active',
+          bytes: 0,
+          packets: 1,
+          process: `uid_${sock.uid}`,
+          interface: 'wlan0',
+        });
+      }
+    }
+
+    return { flows, devStats };
   }
 }
 
 /**
- * CaptureService - 核心内核调度层 (工程建议 1.1, 1.2)
- * 职责: 判定能力、切换源、调度 Pipeline
+ * ActiveDataSource - root 数据源
+ * 可在 PassiveDataSource 基础上增加 eBPF/pcap 实时数据（预留）
  */
+class ActiveDataSource {
+  async fetch(): Promise<{ flows: Partial<Flow>[]; devStats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> }> {
+    const base = new PassiveDataSource();
+    return base.fetch();
+  }
+}
+
+// ============================================================
+// CaptureService
+// ============================================================
+
 export class CaptureService {
-  private static dataSource: IDataSource = new PassiveDataSource();
-  private static flows: Flow[] = [
-    {
-      id: 'init-1',
-      srcIp: '10.0.0.1', srcPort: 54321,
-      dstIp: '172.217.160.78', dstPort: 443,
-      protocol: 'TCP', status: 'active',
-      bytes: 1024, packets: 5,
-      process: 'init-system', interface: 'tun0',
-      srcLat: 39.9, srcLng: 116.4, dstLat: 39.9, dstLng: 116.4,
-      timestamp: new Date().toISOString(),
-      metadata: { source: 'passive', timestamp: new Date().toISOString(), reliability: 1.0 }
-    }
-  ];
+  private static dataSource: PassiveDataSource | ActiveDataSource = new PassiveDataSource();
+  private static flows: Flow[] = [];
+  private static stats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> = {};
+  private static prevStats: Record<string, { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number }> = {};
+
   private static state: KernelServiceState = {
     deviceStatus: 'UNCHECKED',
     captureStatus: 'IDLE',
@@ -75,148 +227,213 @@ export class CaptureService {
       hasRoot: false,
       hasPcap: false,
       hasNetLink: false,
-      selinuxEnforced: true
-    }
+      selinuxEnforced: true,
+    },
   };
 
   private static stateListeners: StateListener[] = [];
   private static flowListeners: FlowListener[] = [];
-  private static intervalId: any = null;
-  private static heartbeatId: any = null;
+  private static intervalId: number | null = null;
+  private static heartbeatId: number | null = null;
+  private static flowIdCounter: number = 0;
 
-  static addStateListener(l: StateListener) { this.stateListeners.push(l); l(this.state); }
-  static addFlowListener(l: FlowListener) { this.flowListeners.push(l); l(this.flows); }
+  // ============================================================
+  // Listener 管理
+  // ============================================================
+
+  static addStateListener(l: StateListener) {
+    this.stateListeners.push(l);
+    l(this.state);
+  }
+
+  static addFlowListener(l: FlowListener) {
+    this.flowListeners.push(l);
+    l(this.flows);
+  }
 
   private static updateState(patch: Partial<KernelServiceState>) {
     this.state = { ...this.state, ...patch };
-    this.stateListeners.forEach(l => l(this.state));
+    this.stateListeners.forEach((l) => l(this.state));
   }
 
-  /**
-   * 能力探测机制 (Engineering Suggestion 1.2)
-   */
-  static async detectCapabilities() {
+  private static notifyFlows() {
+    this.flowListeners.forEach((l) => l(this.flows));
+  }
+
+  // ============================================================
+  // 能力探测
+  // ============================================================
+
+  static async detectCapabilities(): Promise<DataSourceType> {
     this.updateState({ captureStatus: 'PROBING' });
-    
+
     // 1. 探测 Root
     const rootStatus = await RootExecutor.checkPermission();
     const hasRoot = rootStatus === 'ROOT_READY';
-    
-    // 2. 探测二进制支持
-    const { success: hasPcap } = await RootExecutor.exec('tcpdump --version');
-    
+
+    // 2. 探测 tcpdump（需要 root）
+    let hasPcap = false;
+    if (hasRoot) {
+      const { success } = await RootExecutor.exec('tcpdump --version');
+      hasPcap = success;
+    }
+
+    // 3. 探测 SELinux 状态
+    let selinuxEnforced = true;
+    if (hasRoot) {
+      const { output } = await RootExecutor.exec('getenforce');
+      selinuxEnforced = output.trim() !== 'Permissive';
+    }
+
     this.updateState({
       deviceStatus: rootStatus,
-      capability: {
-        hasRoot,
-        hasPcap,
-        hasNetLink: hasRoot,
-        selinuxEnforced: true
-      }
+      capability: { hasRoot, hasPcap, hasNetLink: hasRoot, selinuxEnforced },
     });
 
-    // 优先级别策略 (Engineering Suggestion 1.2)
-    let selectedSource: DataSourceType = 'passive';
-    if (hasRoot && hasPcap) selectedSource = 'ebpf'; // 假设 eBPF 优选
-    else if (hasRoot) selectedSource = 'tcpdump';
-    else selectedSource = 'vpn';
-
+    // 数据源优先级：eBPF > tcpdump > passive
+    const selectedSource: DataSourceType = hasRoot && hasPcap ? 'ebpf' : hasRoot ? 'tcpdump' : 'passive';
     this.updateState({ sourceType: selectedSource });
     this.dataSource = hasRoot ? new ActiveDataSource() : new PassiveDataSource();
+
     return selectedSource;
   }
 
-  /**
-   * 初始化 Pipeline (Engineering Suggestion 8.1)
-   */
+  // ============================================================
+  // 初始化
+  // ============================================================
+
   static async initialize() {
-    const source = await this.detectCapabilities();
-    
+    await this.detectCapabilities();
+
     try {
       const { output } = await RootExecutor.exec('ls /sys/class/net');
-      const bestInterface = output.split(' ').find(i => i === 'wlan0') || 'any';
-      
-      if (this.state.capability.hasRoot) {
-        await RootExecutor.exec('setenforce 0');
-      }
+      const interfaces = output.split(' ').filter(Boolean);
+      const bestInterface = interfaces.find((i) => i === 'wlan0') || interfaces.find((i) => i !== 'lo') || 'lo';
 
       this.updateState({ activeInterface: bestInterface, captureStatus: 'IDLE' });
       this.startHeartbeat();
-    } catch (e) {
-      this.updateState({ captureStatus: 'STOPPED', lastError: 'Pipeline 初始化失败' });
+    } catch {
+      this.updateState({ captureStatus: 'STOPPED', lastError: 'Pipeline initialization failed' });
     }
   }
+
+  // ============================================================
+  // 捕获控制
+  // ============================================================
 
   static async startCapture() {
     if (this.state.captureStatus === 'CAPTURING') return;
     this.updateState({ captureStatus: 'CAPTURING' });
-    this.intervalId = setInterval(() => this.pipelineProcessing(), 1000);
+    this.intervalId = window.setInterval(() => this.pipelineTick(), 2000);
   }
 
   static stopCapture() {
     if (this.intervalId) clearInterval(this.intervalId);
+    this.intervalId = null;
     this.updateState({ captureStatus: 'STOPPED' });
   }
 
-  /**
-   * 心跳机制 (Engineering Suggestion 4.2)
-   */
   private static startHeartbeat() {
-    this.heartbeatId = setInterval(() => {
-      console.log(`[KernelHeartbeat] Status: ${this.state.captureStatus}, Source: ${this.state.sourceType}`);
+    this.heartbeatId = window.setInterval(() => {
+      console.log(
+        `[KernelHeartbeat] Status: ${this.state.captureStatus}, Source: ${this.state.sourceType}, ` +
+          `Flows: ${this.flows.length}, Interface: ${this.state.activeInterface}`
+      );
     }, 5000);
   }
 
-  /**
-   * 数据处理管道 (Engineering Suggestion 8.1, P1 Pipeline)
-   * Capture -> Parsing -> Metadata Enrichment -> Filtering -> UI Delivery
-   */
-  private static pipelineProcessing() {
-    const rawData = this.dataSource.fetch();
-    const enrichedData = this.enrichMetadata(rawData);
-    const filteredData = this.applyFiltering(enrichedData);
-    
-    // 维护连接池 (Pooling)
-    this.flows = [filteredData, ...this.flows].slice(0, 500); 
-    
-    // 降频分发 (Throttling UI updates)
-    this.throttleNotify();
-  }
+  // ============================================================
+  // 数据管道
+  // ============================================================
 
-  private static lastNotifyTime = 0;
-  private static throttleNotify() {
-    const now = Date.now();
-    if (now - this.lastNotifyTime > 800) { // P1: UI 高频刷新限流 (800ms)
-      this.flowListeners.forEach(l => l(this.flows));
-      this.lastNotifyTime = now;
-    }
-  }
+  private static async pipelineTick() {
+    try {
+      const { flows: rawFlows, devStats } = await this.dataSource.fetch();
 
-  private static enrichMetadata(data: Partial<Flow>): Flow {
-    const timestamp = new Date().toISOString();
-    return {
-      ...data,
-      id: `pkt-${Math.random().toString(36).substr(2, 9)}`,
-      srcLat: 39.9042, srcLng: 116.4074,
-      dstLat: Math.random() > 0.5 ? 35.6762 : 39.9142, 
-      dstLng: Math.random() > 0.5 ? 139.6503 : 116.4174,
-      timestamp,
-      metadata: {
-        source: this.state.sourceType,
-        timestamp,
-        reliability: this.state.capability.hasRoot ? 0.95 : 0.6
+      // 保存上一轮统计用于计算速率
+      this.prevStats = { ...this.stats };
+      this.stats = devStats;
+
+      // 构建 Flow 列表
+      const enrichedFlows: Flow[] = rawFlows.map((raw) => ({
+        id: `${this.state.sourceType}-${++this.flowIdCounter}`,
+        srcIp: raw.srcIp || '0.0.0.0',
+        srcPort: raw.srcPort || 0,
+        dstIp: raw.dstIp || '0.0.0.0',
+        dstPort: raw.dstPort || 0,
+        protocol: raw.protocol || 'TCP',
+        status: raw.status || 'active',
+        bytes: raw.bytes || 0,
+        packets: raw.packets || 0,
+        process: raw.process || 'unknown',
+        interface: raw.interface || this.state.activeInterface || 'unknown',
+        srcLat: 39.9,
+        srcLng: 116.4,
+        dstLat: 39.9,
+        dstLng: 116.4,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          source: this.state.sourceType,
+          timestamp: new Date().toISOString(),
+          reliability: this.state.capability.hasRoot ? 0.95 : 0.6,
+        },
+      }));
+
+      // 合并新旧流（去重 + 更新）
+      const mergedMap = new Map<string, Flow>();
+      for (const f of [...this.flows, ...enrichedFlows]) {
+        const key = `${f.srcIp}:${f.srcPort}-${f.dstIp}:${f.dstPort}-${f.protocol}`;
+        mergedMap.set(key, f);
       }
-    } as Flow;
-  }
 
-  private static applyFiltering(flow: Flow): Flow {
-    // 模拟防火墙规则匹配 (P2: 性能限流预留)
-    if (flow.dstIp === '1.1.1.1') {
-      flow.status = 'dropped';
+      this.flows = Array.from(mergedMap.values()).slice(-200); // 保留最近200条
+      this.notifyFlows();
+    } catch (err) {
+      console.error('[CaptureService] Pipeline error:', err);
     }
-    return flow;
   }
 
+  // ============================================================
+  // 流量统计计算
+  // ============================================================
 
-  static getState() { return this.state; }
+  /**
+   * 计算网络统计：bps, pps, CPU 使用率等
+   */
+  static computeStats(): { totalRxBytes: number; totalTxBytes: number; totalRxPackets: number; totalTxPackets: number; deltaRxBps: number; deltaTxBps: number; deltaRxPps: number; deltaTxPps: number } {
+    let totalRxBytes = 0;
+    let totalTxBytes = 0;
+    let totalRxPackets = 0;
+    let totalTxPackets = 0;
+    let deltaRxBps = 0;
+    let deltaTxBps = 0;
+    let deltaRxPps = 0;
+    let deltaTxPps = 0;
+
+    for (const [iface, curr] of Object.entries(this.stats)) {
+      if (iface === 'lo') continue;
+      totalRxBytes += curr.rxBytes;
+      totalTxBytes += curr.txBytes;
+      totalRxPackets += curr.rxPackets;
+      totalTxPackets += curr.txPackets;
+
+      const prev = this.prevStats[iface];
+      if (prev) {
+        deltaRxBps += (curr.rxBytes - prev.rxBytes) * 8; // bytes → bits per tick
+        deltaTxBps += (curr.txBytes - prev.txBytes) * 8;
+        deltaRxPps += curr.rxPackets - prev.rxPackets;
+        deltaTxPps += curr.txPackets - prev.txPackets;
+      }
+    }
+
+    return { totalRxBytes, totalTxBytes, totalRxPackets, totalTxPackets, deltaRxBps, deltaTxBps, deltaRxPps, deltaTxPps };
+  }
+
+  static getDevStats() {
+    return this.stats;
+  }
+
+  static getState(): KernelServiceState {
+    return this.state;
+  }
 }

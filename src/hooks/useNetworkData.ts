@@ -12,39 +12,41 @@ export function useNetworkData() {
   const [trends, setTrends] = useState({ bps: 0, pps: 0, activeConnections: 0 });
   const [serviceState, setServiceState] = useState<KernelServiceState>(CaptureService.getState());
 
-  // 统一 UI State 模型 (Engineering Suggestion 6.3)
   const uiState = useMemo<UIState>(() => {
-    const leaks = flows.filter(f => f.status === 'leaking');
+    const leaking = flows.filter((f) => f.status === 'leaking');
     return {
       isKernelActive: serviceState.captureStatus === 'CAPTURING',
-      isLeakDetected: leaks.length > 0,
-      threatLevel: leaks.length > 5 ? 'critical' : (leaks.length > 0 ? 'high' : 'low'),
+      isLeakDetected: leaking.length > 0,
+      threatLevel: leaking.length > 5 ? 'critical' : leaking.length > 0 ? 'high' : 'low',
       activeCount: flows.length,
-      lastSyncTime: Date.now()
+      lastSyncTime: Date.now(),
     };
   }, [flows, serviceState]);
 
   useEffect(() => {
     CaptureService.addStateListener(setServiceState);
-    
+
     CaptureService.addFlowListener((allFlows) => {
       setFlows(allFlows);
-      
+
       const activeCount = allFlows.length;
       const currentBytes = allFlows.reduce((acc, f) => acc + f.bytes, 0);
-      const currentBps = currentBytes * 8; 
-      const currentPps = allFlows.length;
+      const currentBps = currentBytes * 8;
+      const currentPps = allFlows.reduce((acc, f) => acc + f.packets, 0);
+
+      // Use CaptureService.computeStats() for real-rate calculations
+      const devStats = CaptureService.computeStats();
 
       const newStats: NetworkStats = {
         activeConnections: activeCount,
-        totalPackets: activeCount * 10,
+        totalPackets: activeCount,
         totalBytes: currentBytes,
-        bps: currentBps,
-        pps: currentPps,
-        cpuUsage: (Math.random() * 5 + 2).toFixed(2),
-        uptime: Math.floor(Math.random() * 1000),
-        memoryUsage: '42MB',
-        metadata: allFlows[0]?.metadata || { source: 'passive', timestamp: new Date().toISOString(), reliability: 0.5 }
+        bps: devStats.deltaRxBps + devStats.deltaTxBps,
+        pps: devStats.deltaRxPps + devStats.deltaTxPps,
+        cpuUsage: '--',
+        uptime: Date.now(),
+        memoryUsage: '--',
+        metadata: allFlows[0]?.metadata || { source: 'passive', timestamp: new Date().toISOString(), reliability: 0.5 },
       };
 
       setStats(newStats);
@@ -53,16 +55,16 @@ export function useNetworkData() {
         setTrends({
           bps: calculateTrend(newStats.bps, prevStats.current.bps),
           pps: calculateTrend(newStats.pps, prevStats.current.pps),
-          activeConnections: calculateTrend(newStats.activeConnections, prevStats.current.activeConnections)
+          activeConnections: calculateTrend(newStats.activeConnections, prevStats.current.activeConnections),
         });
       }
       prevStats.current = newStats;
 
-      setHistory(prev => {
-        const point = {
+      setHistory((prev) => {
+        const point: HistoryPoint = {
           time: new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' }),
           bps: newStats.bps / 1024,
-          pps: newStats.pps
+          pps: newStats.pps,
         };
         return [...prev, point].slice(-20);
       });
