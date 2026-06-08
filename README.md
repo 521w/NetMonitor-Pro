@@ -1,49 +1,53 @@
 # NetMonitor-Pro
 
-A real-time kernel-level network traffic auditor for Android. Monitors socket connections, bandwidth usage, and detects traffic that bypasses VPN tunnels.
+A React + Capacitor network traffic dashboard for Android-focused network auditing, VPN leak visibility, and traffic inspection.
+
+It presents network flows, interface activity, suspected VPN bypasses, and local analysis in a mobile-friendly dashboard.
+
+## What It Does
+
+- Reads real network data from Android/Linux network interfaces where available
+- Shows live traffic charts and connection tables
+- Highlights flows that appear to bypass a VPN tunnel
+- Displays public exit-IP information
+- Provides local privacy-risk analysis and remediation suggestions
+- Exports observed flow data for later review
 
 ## Features
 
-- **Real kernel data** — Reads `/proc/net/tcp`, `/proc/net/udp`, `/proc/net/dev` directly (requires root)
-- **VPN leak detection** — Identifies processes sending data outside the VPN tunnel (tun0)
-- **Live traffic visualization** — Real-time BPS/PPS charts and connection table
-- **IP geolocation** — Shows exit IP via public API
-- **AI analysis** — Evaluates privacy risk and suggests firewall rules
-- **No mock data** — All displayed data comes from the Android kernel
+| Feature | Description |
+| --- | --- |
+| Live dashboard | BPS/PPS charts, traffic trends, interface state, flow overview |
+| Flow table | Searchable connection table with process/interface fields |
+| VPN leak detection | Flags traffic not routed through expected tunnel interfaces |
+| Public IP lookup | Shows exit IP metadata through an external lookup service |
+| Local insight panel | Summarizes risk level, suspicious IPs, and recommended actions |
+| Android bridge | Capacitor project structure for Android deployment |
+
+## Good For
+
+- Rooted Android network inspection
+- VPN leak troubleshooting
+- Mobile traffic visualization
+- Security dashboard prototyping
+- Turning raw network data into a usable operator interface
+
+## Tech Stack
+
+| Area | Tech |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite |
+| Mobile | Capacitor Android |
+| UI | Tailwind CSS, lucide-react, motion |
+| Charts | Recharts |
+| Tests | Vitest |
 
 ## Requirements
 
-- Android device with **root access** (Magisk recommended)
-- Termux or Capacitor Android environment
-- Node.js / npm for development
-
-## Architecture
-
-```
-src/
-├── services/
-│   ├── rootExecutor.ts      # Executes su -c commands safely (whitelist)
-│   ├── captureService.ts    # Reads /proc/net/* and emits Flow events
-│   └── ipService.ts         # Public IP detection via ipapi.co
-├── hooks/
-│   └── useNetworkData.ts    # React hook: subscribes to CaptureService
-├── components/
-│   ├── FlowTable.tsx        # Connection list with filtering
-│   ├── NetworkMap.tsx       # Topology visualization
-│   ├── LocalInsightPanel.tsx # AI analysis panel
-│   ├── SecurityShield.tsx   # Threat level display
-│   └── ...
-└── App.tsx                  # Main dashboard
-```
-
-## Data Sources
-
-| Source | Root Required | Data |
-|--------|---------------|------|
-| `/proc/net/tcp` | Yes | TCP connection table (local/remote IP:port, state, UID) |
-| `/proc/net/udp` | Yes | UDP connection table |
-| `/proc/net/dev` | No | Per-interface byte/packet counters |
-| `/proc/net/xt_qtaguid/iface_stat_all` | No | Per-app traffic stats (Android 4.0+) |
+- Node.js and npm
+- Android Studio / Android SDK for Android builds
+- Rooted Android device for full network visibility
+- Optional network access for public IP lookup
 
 ## Development
 
@@ -52,18 +56,36 @@ npm install
 npm run dev
 ```
 
-## Building for Android
+Type-check:
 
 ```bash
-npx cap sync android
-npx cap run android
+npm run lint
 ```
 
-## Security
+Run tests:
 
-- All shell commands are validated against a whitelist
-- No data is sent to external servers (except optional IP geolocation API)
-- No telemetry or analytics
+```bash
+npm test
+```
+
+Build web assets:
+
+```bash
+npm run build
+```
+
+## Android Build
+
+```bash
+npm run android:sync
+npm run android:open
+```
+
+## Security Notes
+
+- Full kernel-level visibility generally requires root.
+- Public IP lookup may contact an external API.
+- The dashboard should not be treated as a certified forensic tool; it is a practical monitoring and analysis interface.
 
 ## License
 
