@@ -56,6 +56,22 @@ npm install
 npm run dev
 ```
 
+## Verification
+
+Validated on Termux / Node.js v22.22.0:
+
+```bash
+npm install
+npm run lint
+npm run build
+```
+
+Notes:
+
+- `npm run lint` completed with `tsc --noEmit`.
+- `npm run build` completed with Vite.
+- `npm test` currently fails in this Termux environment because Vitest worker forks exit unexpectedly and no tests are discovered.
+
 Type-check:
 
 ```bash
